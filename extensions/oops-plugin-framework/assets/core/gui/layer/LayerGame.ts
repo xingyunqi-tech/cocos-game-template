@@ -1,0 +1,158 @@
+import { Node, NodePool, Vec3, warn } from 'cc';
+import { resLoader } from '../../common/loader/ResLoader';
+import { ViewUtil } from '../../utils/ViewUtil';
+import { LayerCustomType } from './LayerEnum';
+import { GameElementParams, LayerGameElement } from './LayerGameElement';
+import { LayerHelper } from './LayerHelper';
+import type { GameElementConfig } from './UIConfig';
+
+/* 二维游戏层 */
+export class LayerGame extends Node {
+    /** 当前显示的元素节点 */
+    protected elements = new Map<string, GameElementParams>();
+
+    constructor() {
+        super(LayerCustomType.Game);
+        LayerHelper.setFullScreen(this);
+    }
+
+    /**
+     * 加载资源并添加游戏元素
+     * @param prefab    资源地址
+     * @param config    游戏元素自定义配置
+     */
+    add(prefab: string, config: GameElementConfig = {}): Promise<Node> {
+        return new Promise(async (resolve, reject) => {
+            const params = this.setParams(prefab, config, false);
+            const node = await ViewUtil.createPrefabNodeAsync(prefab, params.config.bundle);
+            if (node) {
+                // 设置自定义属性
+                this.setNode(node, config);
+
+                const lge = node.addComponent(LayerGameElement);
+                lge.params = params;
+                params.nodes.push(node);
+            }
+            resolve(node);
+        });
+    }
+
+    /**
+     * 加载资源并添加游戏元素 - 支持对象池
+     * @param prefab    资源地址
+     * @param config    游戏元素自定义配置
+     */
+    addPool(prefab: string, config: GameElementConfig = {}): Promise<Node> {
+        return new Promise(async (resolve, reject) => {
+            const params = this.setParams(prefab, config, true);
+            let node: Node = null!;
+            if (params.pool.size() > 0) {
+                node = params.pool.get()!;
+            }
+            else {
+                node = await ViewUtil.createPrefabNodeAsync(prefab, params.config.bundle);
+                node.addComponent(LayerGameElement);
+            }
+
+            // 设置自定义属性
+            this.setNode(node, config);
+
+            const lge = node.getComponent(LayerGameElement)!;
+            lge.params = params;
+
+            resolve(node);
+        });
+    }
+
+    /** 清理池数据 */
+    clearPool(node: Node) {
+        const lge = node.getComponent(LayerGameElement)!;
+        if (lge) {
+            const params = this.elements.get(lge.params.uiid);
+            if (params) params.pool.clear();
+        }
+    }
+
+    /**
+     * 移除游戏元素
+     * @param node 游戏元素节点
+     */
+    remove(node: Node) {
+        const lge = node.getComponent(LayerGameElement)!;
+        if (lge) {
+            if (lge.params.pool) {
+                lge.params.pool.put(node);
+            }
+            else {
+                const nodes = lge.params.nodes;
+                const index = nodes.indexOf(node);
+                if (index != -1) {
+                    nodes.splice(index, 1);
+                    if (nodes.length == 0) {
+                        this.elements.delete(lge.params.uiid);
+                        resLoader.release(lge.params.config.prefab!, lge.params.config.bundle);
+                    }
+                }
+                node.destroy();
+            }
+        }
+        else {
+            warn('当前删除游戏元素的 Node 不是通过框架添加的');
+        }
+    }
+
+    /** 设置元素参数 */
+    private setParams(prefab: string, config: GameElementConfig, pool: boolean) {
+        const bundleName = config.bundle ? config.bundle : resLoader.defaultBundleName;
+        const uuid = bundleName + '_' + prefab;
+        let params = this.elements.get(uuid);
+        if (params == null) {
+            config.prefab = prefab;
+            params = new GameElementParams();
+            params.uiid = uuid;
+            params.config = config;
+            if (pool) {
+                params.pool = new NodePool();
+            }
+            else {
+                params.nodes = [];
+            }
+            this.elements.set(uuid, params);
+        }
+        params.config.bundle = bundleName;
+        return params;
+    }
+
+    /** 设置自定义属性 */
+    private setNode(node: Node, config: GameElementConfig) {
+        node.scale = config.scale ? config.scale : Vec3.ONE;
+        node.position = config.position ? config.position : Vec3.ZERO;
+        node.eulerAngles = config.eulerAngles ? config.eulerAngles : Vec3.ZERO;
+        node.parent = config.parent ? config.parent : this;
+        if (config.siblingIndex != null) node.setSiblingIndex(config.siblingIndex);
+    }
+
+    /** 销毁时清理所有游戏元素 */
+    onDestroy() {
+        // 清理所有对象池
+        this.elements.forEach((params) => {
+            if (params.pool) {
+                params.pool.clear();
+            }
+            // 清理普通节点数组
+            if (params.nodes) {
+                params.nodes.forEach(node => {
+                    if (node && node.isValid) {
+                        node.destroy();
+                    }
+                });
+                params.nodes.length = 0;
+            }
+            // 释放资源
+            if (params.config.prefab) {
+                resLoader.release(params.config.prefab, params.config.bundle);
+            }
+        });
+        this.elements.clear();
+    }
+}

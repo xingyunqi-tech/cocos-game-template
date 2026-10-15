@@ -1,0 +1,16 @@
+extensions/oops-plugin-framework/
+library/
+temp/
+local/
+build/
+profiles/
+settings/
+assets/**/*.scene
+assets/**/*.prefab
+assets/**/*.anim
+assets/**/*.meta
+extensions/**/*.meta
+docs/
+package-lock.json
+assets/**/*.pac
+extensions/**/*.pac

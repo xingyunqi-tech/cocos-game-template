@@ -1,0 +1,8 @@
+{
+  "platform": "web-mobile",
+  "packages": {
+    "web-mobile": {
+      "orientation": "portrait"
+    }
+  }
+}

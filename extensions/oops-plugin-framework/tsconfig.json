@@ -1,0 +1,40 @@
+{
+    "compilerOptions": {
+        "target": "ES2017",
+        "module": "CommonJS",
+        "outDir": "./dist",
+        "rootDir": "./src",
+        "strict": true,
+        "strictNullChecks": false,
+        "noImplicitAny": false,
+        "moduleResolution": "node",
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "resolveJsonModule": true,
+        "experimentalDecorators": true,
+        "isolatedModules": true,
+        "baseUrl": "./",
+        "paths": {
+            "db://oops-framework/*": [
+                "./assets/*"
+            ]
+        },
+        "types": [
+            "node",
+            "../../temp/declarations/cc.custom-macro",
+            "../../temp/declarations/cc",
+            "../../temp/declarations/jsb",
+            "../../temp/declarations/cc.env"
+        ]
+    },
+    "include": [
+        "@types/**/*",
+        "src/**/*"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist",
+        "temp"
+    ]
+}

@@ -1,0 +1,38 @@
+{
+  "name": "cocos-game-template",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cocos Creator 3.8 多端小游戏模板（Web / 微信 / 抖音）",
+  "uuid": "6f3c2a1e-8b4d-4c7a-9e21-5d0b7a3f9c64",
+  "creator": {
+    "version": "3.8.8"
+  },
+  "type": "module",
+  "engines": {
+    "node": "^22.13.0 || ^24.0.0 || >=26.0.0"
+  },
+  "scripts": {
+    "gen:cc-env": "node scripts/gen-cc-env.mjs",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "check:plugins": "node scripts/check-plugins.mjs",
+    "build": "node scripts/build.mjs",
+    "smoke:web": "node scripts/smoke-web.mjs",
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run check:plugins"
+  },
+  "devDependencies": {
+    "@cocos/creator-types": "3.8.8",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "26.6.5",
+    "eslint": "10.12.0",
+    "globals": "^17.13.0",
+    "playwright-core": "1.64.1",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.2",
+    "vitest": "5.0.4"
+  }
+}

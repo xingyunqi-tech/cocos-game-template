@@ -1,0 +1,12 @@
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.mp3 binary
+*.ogg binary
+*.wav binary
+*.ttf binary
+*.bin binary
+*.atlas text eol=lf

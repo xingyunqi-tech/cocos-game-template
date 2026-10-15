@@ -1,0 +1,145 @@
+import { director, error, JsonAsset, TTFFont } from 'cc';
+import { resLoader } from '../../../core/common/loader/ResLoader';
+import { Logger } from '../../../core/common/log/Logger';
+import { LanguageData, LanguageDataType, LanguageType } from './LanguageData';
+
+export class LanguagePack {
+    /**
+     * 刷新语言文字
+     * @param lang
+     */
+    updateLanguage(lang: string) {
+        const rootNodes = director.getScene()!.children;
+        for (let i = 0; i < rootNodes.length; ++i) {
+            LanguageType.forEach(type => {
+                const comps: any[] = rootNodes[i].getComponentsInChildren(type);
+                for (let j = 0; j < comps.length; j++) {
+                    comps[j].language();
+                }
+            });
+        }
+    }
+
+    /**
+     * 下载对应语言包资源
+     * @param lang 语言标识
+     * @param callback 下载完成回调
+     */
+    async loadLanguageAssets(lang: string, callback: Function) {
+        await this.loadTexture(lang);
+        await this.loadSpine(lang);
+        await this.loadJson(lang);
+        // await this.loadTable(lang);
+
+        callback(lang);
+    }
+
+    /** 多语言Excel配置表数据 */
+    // private async loadTable(lang: string): Promise<void> {
+    //     try {
+    //         const json = await JsonUtil.load('Language');
+    //         if (json) {
+    //             LanguageData.language.set(LanguageDataType.Excel, json);
+    //             Logger.instance.logConfig('config/game/Language', '下载语言包 table 资源');
+    //         }
+    //     } catch (err) {
+    //         error('[LanguagePack] 加载配置表失败:', err);
+    //     }
+    // }
+
+    /** 纹理多语言资源 */
+    private loadTexture(lang: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const path = `${LanguageData.path_texture}/${lang}`;
+            resLoader.loadDir(path, (err: any, assets: any) => {
+                if (err) {
+                    error('[LanguagePack] 加载纹理资源失败:', err);
+                    resolve();
+                    return;
+                }
+                Logger.instance.logConfig(path, '下载语言包 textures 资源');
+                resolve();
+            });
+        });
+    }
+
+    /** Json格式多语言资源 */
+    private async loadJson(lang: string): Promise<void> {
+        const path = `${LanguageData.path_json}/${lang}`;
+
+        // 尝试加载JSON资源，如果不存在则忽略错误
+        try {
+            const jsonAsset = await resLoader.load(path, JsonAsset);
+            if (jsonAsset) {
+                LanguageData.language.set(LanguageDataType.Json, jsonAsset.json);
+                Logger.instance.logConfig(path, '下载语言包 json 资源');
+            }
+        }
+        catch (err) {
+            // JSON文件不存在时不报错，只记录日志
+            Logger.instance.logConfig(path, '语言包 json 资源不存在，跳过加载');
+        }
+
+        // 尝试加载字体资源，如果不存在则忽略错误
+        try {
+            const font = await resLoader.load(path, TTFFont);
+            if (font) {
+                LanguageData.font = font;
+                Logger.instance.logConfig(path, '下载语言包 ttf 资源');
+            }
+        }
+        catch (err) {
+            // 字体文件不存在时不报错
+            Logger.instance.logConfig(path, '语言包 ttf 资源不存在，跳过加载');
+        }
+    }
+
+    /** SPINE动画多语言资源 */
+    private loadSpine(lang: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const path = `${LanguageData.path_spine}/${lang}`;
+            resLoader.loadDir(path, (err: any, assets: any) => {
+                if (err) {
+                    error('[LanguagePack] 加载Spine资源失败:', err);
+                    resolve();
+                    return;
+                }
+                Logger.instance.logConfig(path, '下载语言包 spine 资源');
+                resolve();
+            });
+        });
+    }
+
+    /**
+     * 释放某个语言的语言包资源包括json
+     * @param lang
+     */
+    releaseLanguageAssets(lang: string) {
+        try {
+            // 释放纹理资源目录
+            const langTexture = `${LanguageData.path_texture}/${lang}`;
+            resLoader.releaseDir(langTexture);
+
+            // 释放JSON资源
+            const langJson = `${LanguageData.path_json}/${lang}`;
+            const json = resLoader.get(langJson, JsonAsset);
+            if (json) {
+                json.decRef();
+            }
+
+            // 释放字体资源
+            const font = resLoader.get(langJson, TTFFont);
+            if (font) {
+                font.decRef();
+            }
+
+            // 释放Spine资源目录
+            const langSpine = `${LanguageData.path_spine}/${lang}`;
+            resLoader.releaseDir(langSpine);
+
+            Logger.instance.logConfig(`释放语言包资源: ${lang}`);
+        } catch (err) {
+            error('[LanguagePack] 释放资源失败:', err);
+        }
+    }
+}

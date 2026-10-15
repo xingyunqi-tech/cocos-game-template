@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2020", "DOM"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "types": ["@cocos/creator-types/engine"],
+    "paths": {
+      "db://oops-framework/*": ["./extensions/oops-plugin-framework/assets/*"],
+      "db://game-core": ["./extensions/game-core/assets/index.ts"],
+      "db://game-core/*": ["./extensions/game-core/assets/*"]
+    }
+  },
+  "include": [
+    "assets/**/*.ts",
+    "extensions/game-core/assets/**/*.ts",
+    "extensions/oops-plugin-framework/assets/types/**/*.d.ts",
+    "extensions/oops-plugin-framework/assets/libs/extension/NodeExt.ts",
+    "types/**/*.d.ts",
+    "tests/**/*.ts"
+  ]
+}

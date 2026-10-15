@@ -1,0 +1,80 @@
+{
+  "type": "dev",
+  "config": {
+    "dev": {
+      "version": "0.1.0",
+      "localDataKey": "game-template",
+      "localDataIv": "template-iv",
+      "frameRate": 60,
+      "loadingTimeoutGui": 1000,
+      "mobileSafeArea": true,
+      "stats": true,
+      "httpServer": "http://127.0.0.1:3000/",
+      "httpTimeout": 10000
+    },
+    "test": {
+      "version": "0.1.0",
+      "localDataKey": "game-template",
+      "localDataIv": "template-iv",
+      "frameRate": 60,
+      "loadingTimeoutGui": 1000,
+      "mobileSafeArea": true,
+      "stats": false,
+      "httpServer": "https://test-api.example.com/",
+      "httpTimeout": 10000
+    },
+    "prod": {
+      "version": "0.1.0",
+      "localDataKey": "game-template",
+      "localDataIv": "template-iv",
+      "frameRate": 60,
+      "loadingTimeoutGui": 1000,
+      "mobileSafeArea": true,
+      "stats": false,
+      "httpServer": "https://api.example.com/",
+      "httpTimeout": 10000
+    }
+  },
+  "gui": [
+    {
+      "name": "LayerGame",
+      "type": "Game"
+    },
+    {
+      "name": "LayerUI",
+      "type": "UI"
+    },
+    {
+      "name": "LayerPopUp",
+      "type": "PopUp"
+    },
+    {
+      "name": "LayerDialog",
+      "type": "Dialog"
+    },
+    {
+      "name": "LayerSystem",
+      "type": "Dialog"
+    },
+    {
+      "name": "LayerNotify",
+      "type": "Notify"
+    },
+    {
+      "name": "LayerGuide",
+      "type": "Node"
+    }
+  ],
+  "language": {
+    "default": "zh",
+    "type": ["zh", "en"],
+    "path": {
+      "json": "language/json",
+      "texture": "language/texture",
+      "spine": ""
+    }
+  },
+  "bundle": {
+    "default": "resources"
+  }
+}

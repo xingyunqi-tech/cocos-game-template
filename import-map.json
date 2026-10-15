@@ -1,0 +1,5 @@
+{
+  "imports": {
+    "db://game-core": "./extensions/game-core/assets/index.ts"
+  }
+}

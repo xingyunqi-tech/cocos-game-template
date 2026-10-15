@@ -1,0 +1,140 @@
+import type { EventTouch } from 'cc';
+import { BlockInputEvents, Node } from 'cc';
+import { ViewUtil } from '../../utils/ViewUtil';
+import { LayerUI } from './LayerUI';
+import type { UIState } from './LayerUIElement';
+import type { UIConfig } from './UIConfig';
+import { GuiPromptConfig } from '../GuiPromptConfig';
+
+/* 弹窗层，允许同时弹出多个窗口 */
+export class LayerPopUp extends LayerUI {
+    /** 触摸事件阻挡 */
+    protected black!: BlockInputEvents;
+    /** 半透明遮罩资源 */
+    protected mask!: Node;
+
+    protected onChildAdded(child: Node) {
+        this.mask && this.mask.setSiblingIndex(this.children.length - 2);
+    }
+
+    protected onChildRemoved(child: Node) {
+        this.mask && this.mask.setSiblingIndex(this.children.length - 2);
+        super.onChildRemoved(child);
+    }
+
+    protected uiInit(state: UIState): Promise<boolean> {
+        return new Promise(async resolve => {
+            const r = await super.uiInit(state);
+            if (r) {
+                // 界面加载完成显示时，启动触摸非窗口区域关闭
+                await this.openVacancyRemove(state.config);
+
+                // 界面加载完成显示时，层级事件阻挡
+                this.black.enabled = true;
+            }
+            resolve(r);
+        });
+    }
+
+    protected closeUi(state: UIState) {
+        super.closeUi(state);
+
+        // 界面关闭后，关闭触摸事件阻挡、关闭触摸非窗口区域关闭、关闭遮罩
+        this.closeBlack();
+    }
+
+    /** 检查是否存在需要 mask 的窗口 */
+    private hasMaskWindow(): boolean {
+        for (const value of this.ui_nodes.values()) {
+            if (value.config.mask) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 检查是否存在需要 vacancy 的窗口 */
+    private hasVacancyWindow(): boolean {
+        for (const value of this.ui_nodes.values()) {
+            if (value.config.vacancy) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 设置触摸事件阻挡 */
+    protected closeBlack() {
+        // 检查是否还需要阻挡输入（mask 或 vacancy）
+        const needsBlocking = this.hasMaskWindow() || this.hasVacancyWindow();
+
+        if (!needsBlocking) {
+            if (this.black) this.black.enabled = false;
+            this.closeVacancyRemove();
+        }
+
+        this.closeMask();
+    }
+
+    /** 关闭遮罩 */
+    protected closeMask() {
+        if (this.mask == null) return;
+
+        // 如果不存在需要 mask 的窗口，则完全移除 mask
+        if (!this.hasMaskWindow()) {
+            this.mask.uiSprite.enabled = false;
+            this.mask.parent = null;
+        }
+    }
+
+    /** 启动触摸非窗口区域关闭 */
+    protected async openVacancyRemove(config: UIConfig) {
+        // 背景半透明遮罩
+        if (this.mask == null) {
+            this.mask = await ViewUtil.createPrefabNodeAsync(GuiPromptConfig.Mask.path);
+            this.mask.on(Node.EventType.TOUCH_END, this.onTouchEnd, this);
+
+            this.black = this.mask.addComponent(BlockInputEvents);
+            this.black.enabled = false;
+        }
+
+        if (config.mask) {
+            this.mask.parent = this;
+            this.mask.uiSprite.enabled = true;
+        }
+    }
+
+    /** 关闭触摸非窗口区域关闭 */
+    protected closeVacancyRemove() {
+        if (!this.hasVacancyWindow() && this.hasEventListener(Node.EventType.TOUCH_END, this.onTouchEnd, this)) {
+            this.off(Node.EventType.TOUCH_END, this.onTouchEnd, this);
+        }
+    }
+
+    /** 触摸非窗口区域关闭 */
+    private onTouchEnd(event: EventTouch) {
+        if (this.ui_nodes.size > 0) {
+            const vp = this.ui_nodes.array[this.ui_nodes.size - 1];
+            if (vp.valid && vp.config.vacancy) {
+                this.remove(vp.config.prefab);
+            }
+        }
+    }
+
+    clear(isDestroy: boolean) {
+        super.clear(isDestroy);
+        this.closeBlack();
+    }
+
+    /** 销毁时释放资源 */
+    onDestroy() {
+        // 清理遮罩节点
+        if (this.mask) {
+            this.mask.destroy();
+            this.mask = null!;
+        }
+
+        // 清理事件阻挡组件引用
+        this.black = null!;
+    }
+}

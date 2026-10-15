@@ -135,7 +135,7 @@ cocos-game-template/
 
 - `game-core` 每次发版打 tag（`core-vX.Y.Z`）并更新 CHANGELOG，破坏性变更升主版本并附迁移说明
 - 下游执行 `scripts/update-core.sh <version>` 替换 `extensions/game-core/`，项目侧资源变更按 CHANGELOG 手工合入
-- `npm run check:plugins` 校验 `oops-plugin-framework` 与 `game-core` 未被本地修改
+- `npm run check:plugins` 校验 `oops-plugin-framework` 与 `game-core` 未被本地修改；模板仓库内只锁定 oops，`game-core` 的锁定快照在 M4 首次发版时生成并随版本分发
 
 ## 4. game-core 模块设计
 
@@ -286,7 +286,7 @@ interface ISidebar {                 // 抖音必接
 | 1 | 微信小游戏 AppID（主体资质）；此前用测试号 | 批次 4 前 | 待指派 | 无法测分离引擎、上传体验版 |
 | 2 | 抖音小游戏 AppID（主体资质） | 批次 4 前 | 待指派 | 无法真机预览与上传预检 |
 | 3 | 真机测试机（见 §8 机型矩阵） | 批次 4 前 | 待指派 | 无法测性能基线 |
-| 3a | 抖音开发者工具安装 | 批次 2 结束前 | 待指派 | 无法在模拟器运行抖音包 |
+| 3a | 抖音开发者工具安装；微信开发者工具开启服务端口 | 批次 3 结束前 | 待指派 | 无法在模拟器运行小游戏包 |
 | 4 | 后端登录接口（§4.3 约定） | M1b 结束 | 待指派 | 真机登录只能 mock，验收第 4 条不能完成 |
 | 5 | 微信、抖音广告位 / 测试广告位 | M1b | 待指派 | 广告只能 GM 模拟 |
 | 6 | 后台隐私指引、适龄提示配置权限 | M3 前 | 待指派 | 体验版隐私接口不可调用 |
@@ -308,7 +308,7 @@ interface ISidebar {                 // 抖音必接
 |---|---|---|---|
 | 版本查询 | 报告中的版本清单 | §2.1、§2.2 全部依赖取最新稳定版 | 完成 |
 | 版本组合验证 | `docs/spike-report.md` | Creator 3.8.8 + oops develop + 移植资源三端构建无 error；Web 运行与渲染通过 | 完成 |
-| 小游戏模拟器运行 | 报告补充 | 微信开发者工具（测试号）、抖音开发者工具中运行空包无报错 | 遗留，批次 2 结束前 |
+| 小游戏模拟器运行 | 报告补充 | 微信开发者工具（测试号）、抖音开发者工具中运行空包无报错 | 遗留，批次 3 结束前（需开启微信开发者工具服务端口、安装抖音开发者工具） |
 | 工具链兼容 | 报告结论 | TS、ESLint、Vitest、creator-types 协同可用；引用 oops 的代码 strict tsc 0 错误 | 完成 |
 | 插件资源挂载验证 | 报告结论 | 资源与脚本在插件中的放置规则明确 | 完成 |
 | 平台常量与 API 核实 | 报告结论 | 见报告 §5 | 完成 |
@@ -324,12 +324,13 @@ interface ISidebar {                 // 抖音必接
 | 工程初始化 | Cocos 工程、`.gitignore`（含 `.oops/`、`library/`、`temp/`、`local/`、`build/`）、README 初稿、`package.json` `engines` | 编辑器打开无报错 | S0 |
 | 项目设置 | `settings/v2/packages/*.json` | 引擎模块按 §5 最小集；设计分辨率、横竖屏、bundle 配置逐项确定，不整体继承教程 | 工程初始化 |
 | 插件引入 | `extensions/oops-plugin-framework`（锁定 commit） | `check:plugins` 通过 | S0 |
-| `game-core` 插件骨架 | `extensions/game-core`（package.json、mount、index.ts、CHANGELOG） | game 中可 `import 'db://game-core'` | S0 |
+| `game-core` 插件骨架 | `extensions/game-core`（package.json、mount、index.ts、CHANGELOG）、`import-map.json` | game 中可 `import 'db://game-core'`，三端构建覆盖 `assets/game/GameEntry.ts` | S0 |
 | 运行资源移植 | config.json、Root 场景、提示 prefab，标注来源 commit | 空项目启动显示 Toast 正常 | 插件引入 |
 | Root 子类 | `boot/Root` | config 缺失时 3 次后兜底提示 | 运行资源移植 |
 | 规范与类型检查 | ESLint 依赖约束、Prettier、tsconfig、类型声明（§2.2） | 无编辑器环境下 `npm run lint`、`npm run typecheck` 通过 | 骨架 |
 | 环境配置 | `IConfigEnvironment` 扩展 | `type` 切换后 baseURL 随之改变 | 运行资源移植 |
 | 分支与评审流程 | `docs/contributing.md` | 见 §10 | — |
+| 构建与冒烟脚本（基础版） | `scripts/build.mjs`、`scripts/smoke-web.mjs` | 三端构建按 §5 规则判定；Web 冒烟检查初始化、环境、Toast | 工程初始化 |
 
 ### M1a 基础能力（6 天）
 
