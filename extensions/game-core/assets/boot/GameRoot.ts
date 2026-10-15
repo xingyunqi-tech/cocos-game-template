@@ -1,14 +1,22 @@
 import { _decorator, Color, JsonAsset, Label, Node, resources, UITransform } from 'cc';
 import { Root } from 'db://oops-framework/core/Root';
 import { GuiPromptConfig } from 'db://oops-framework/core/gui/GuiPromptConfig';
+import { bootPipeline, initGameCore } from '../core';
+import { reportError } from '../monitor/errors';
+import { createLogger } from '../monitor/logger';
+import { track } from '../monitor/track';
+import { BootStepError } from './BootPipeline';
 import { retry } from './retry';
+
+const log = createLogger('boot');
 
 const { ccclass } = _decorator;
 
 export const CONFIG_PATH = 'config';
 export const CONFIG_LOAD_ATTEMPTS = 3;
 
-const FALLBACK_TEXT = '配置加载失败，点击重试';
+const CONFIG_FAILED_TEXT = '配置加载失败，点击重试';
+const BOOT_FAILED_TEXT = '启动失败，点击重试';
 const LOADING_TEXT = '加载中…';
 
 GuiPromptConfig.Notify.path = 'common/prefab/notify';
@@ -23,46 +31,85 @@ function loadConfig(): Promise<JsonAsset> {
 
 @ccclass('GameRoot')
 export class GameRoot extends Root {
-    private state: 'idle' | 'booting' | 'booted' = 'idle';
+    private stage: 'config' | 'pipeline' | 'done' = 'config';
+    private busy = false;
     private fallback: Label | null = null;
 
     onLoad() {
         this.enabled = false;
-        void this.boot();
+        void this.attempt();
     }
 
-    private async boot() {
-        if (this.state !== 'idle') return;
-        this.state = 'booting';
+    protected run() {
+        initGameCore();
+        this.stage = 'pipeline';
+        this.busy = false;
+        void this.attempt();
+    }
+
+    private async attempt() {
+        if (this.busy || this.stage === 'done') return;
+        this.busy = true;
         if (this.fallback) this.fallback.string = LOADING_TEXT;
+        if (this.stage === 'config') await this.loadConfigStage();
+        else await this.pipelineStage();
+    }
+
+    private async loadConfigStage() {
         try {
             await retry(loadConfig, CONFIG_LOAD_ATTEMPTS);
         } catch (err) {
             console.error('[game-core] config.json 加载失败', err);
-            this.state = 'idle';
-            this.showFallback();
+            this.busy = false;
+            this.showFallback(CONFIG_FAILED_TEXT);
             return;
         }
-        this.state = 'booted';
-        this.fallback?.node.destroy();
-        this.fallback = null;
+        this.hideFallback();
         super.onLoad();
     }
 
-    private showFallback() {
-        if (this.fallback) {
-            this.fallback.string = FALLBACK_TEXT;
+    private async pipelineStage() {
+        const started = Date.now();
+        try {
+            await bootPipeline.run({
+                onProgress: (ratio, step) => log.debug('启动进度', step, Math.round(ratio * 100)),
+                onStepDone: (result) => {
+                    log.info(`步骤 ${result.name} ${result.ok ? '完成' : '失败'} ${result.durationMs}ms`);
+                    track('boot_step', { step: result.name, ok: result.ok, ms: result.durationMs });
+                    if (!result.ok) reportError(result.error, 'boot', { step: result.name, optional: result.optional });
+                },
+            });
+        } catch (err) {
+            if (!(err instanceof BootStepError)) reportError(err, 'boot');
+            this.busy = false;
+            this.showFallback(BOOT_FAILED_TEXT);
             return;
         }
-        const node = new Node('ConfigLoadFailed');
+        this.stage = 'done';
+        this.busy = false;
+        this.hideFallback();
+        track('boot_done', { ms: Date.now() - started });
+    }
+
+    private hideFallback() {
+        this.fallback?.node.destroy();
+        this.fallback = null;
+    }
+
+    private showFallback(text: string) {
+        if (this.fallback) {
+            this.fallback.string = text;
+            return;
+        }
+        const node = new Node('BootFailed');
         node.layer = this.gui.layer;
         node.addComponent(UITransform).setContentSize(720, 200);
         const label = node.addComponent(Label);
-        label.string = FALLBACK_TEXT;
+        label.string = text;
         label.fontSize = 32;
         label.color = Color.WHITE;
         node.parent = this.gui;
-        node.on(Node.EventType.TOUCH_END, () => void this.boot());
+        node.on(Node.EventType.TOUCH_END, () => void this.attempt());
         this.fallback = label;
     }
 }

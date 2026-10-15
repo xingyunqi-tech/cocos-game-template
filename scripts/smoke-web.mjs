@@ -41,6 +41,15 @@ if (!existsSync(join(values.dir, 'index.html'))) {
 const server = http
     .createServer(async (req, res) => {
         const path = decodeURIComponent((req.url ?? '/').split('?')[0]);
+        if (path === '/__smoke/echo') {
+            let body = '';
+            req.on('data', (chunk) => (body += chunk));
+            req.on('end', () => {
+                res.writeHead(200, { 'content-type': 'application/json' });
+                res.end(JSON.stringify({ method: req.method, auth: req.headers.authorization ?? null, body }));
+            });
+            return;
+        }
         const file = normalize(join(values.dir, path === '/' ? 'index.html' : path));
         try {
             const body = await readFile(file);
@@ -74,6 +83,8 @@ page.on('response', (res) => {
 page.on('requestfailed', (req) => pageErrors.push(`请求失败 ${req.url()}`));
 
 const checks = [];
+const consoleLines = [];
+page.on('console', (msg) => consoleLines.push(msg.text()));
 try {
     await page.goto(`http://127.0.0.1:${port}/`);
     await page.waitForFunction(() => Boolean(window.oops?.gui?.root), null, { timeout: Number(values.timeout) });
@@ -116,6 +127,42 @@ try {
         { timeout: 5000 },
     );
     checks.push('Toast 节点已渲染');
+
+    await page.waitForFunction(() => Boolean(window.gameCore), null, { timeout: 5000 });
+    const stepNames = await page.evaluate(() => window.gameCore.bootPipeline.stepNames);
+    checks.push(`启动流水线步骤：${stepNames.join(' → ')}`);
+    if (!consoleLines.some((line) => line.includes('boot_done'))) throw new Error('启动流水线未完成（未见 boot_done）');
+    checks.push('启动流水线完成');
+
+    const net = await page.evaluate(async (origin) => {
+        const { http, mockTransport, HttpClient, XhrTransport } = window.gameCore;
+        mockTransport.on('GET', '/smoke', () => ({ body: { ok: true } }));
+        const mocked = await http.get('smoke');
+        const xhr = new HttpClient({ transport: new XhrTransport(), baseUrl: origin });
+        const echoed = await xhr.post('__smoke/echo', { a: 1 }, { headers: { Authorization: 'Bearer t' } });
+        return { mocked: mocked.data, echoed: echoed.data };
+    }, `http://127.0.0.1:${port}`);
+    if (!net.mocked?.ok) throw new Error(`Mock 请求失败：${JSON.stringify(net)}`);
+    if (net.echoed?.method !== 'POST' || net.echoed.body !== '{"a":1}' || net.echoed.auth !== 'Bearer t') {
+        throw new Error(`XHR 请求结果不符：${JSON.stringify(net)}`);
+    }
+    checks.push('HttpClient：Mock 与 XHR 请求均正常');
+
+    const saved = await page.evaluate(async () => {
+        const slot = window.gameCore.deviceSave.slot('smoke', { version: 1, defaults: () => ({ n: 0 }) });
+        slot.set({ n: 1 });
+        const before = localStorage.getItem('gc:d:smoke');
+        Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+        document.dispatchEvent(new Event('visibilitychange'));
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        const after = localStorage.getItem('gc:d:smoke');
+        Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+        document.dispatchEvent(new Event('visibilitychange'));
+        localStorage.removeItem('gc:d:smoke');
+        return { before, after };
+    });
+    if (saved.before !== null || saved.after === null) throw new Error(`切后台未落盘：${JSON.stringify(saved)}`);
+    checks.push('切后台时存档立即落盘');
     if (values.screenshot) await page.screenshot({ path: values.screenshot });
 } catch (err) {
     pageErrors.push(`检查失败：${err.message}`);

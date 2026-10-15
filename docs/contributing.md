@@ -26,6 +26,11 @@ npm run build -- web --debug && npm run smoke:web
 - 升级 oops：替换目录后执行 `node scripts/check-plugins.mjs --update oops-plugin-framework --source <仓库@commit>`，用 `git add extensions/oops-plugin-framework && git add -f extensions/oops-plugin-framework/temp` 提交（插件自带的 `.gitignore` 会忽略上游已提交的 `temp/`），并复核开发计划 §2.3
 - `game-core` 发版：更新 `CHANGELOG.md` 与 `package.json` 版本，打 tag `core-vX.Y.Z`
 
+## 编码约束
+
+- Cocos 构建使用 Babel loose 模式，对 Set、Map 等非数组可迭代对象使用展开语法（`[...set]`）会得到错误结果；改用 `Array.from(set)`。单测环境发现不了这类问题，依赖 `npm run smoke:web` 覆盖
+- 平台无关的逻辑写成不依赖 `cc` 的纯 TS 模块，便于 Vitest 覆盖
+
 ## 注释与命名
 
 - 注释只描述当前代码，不写变更历史

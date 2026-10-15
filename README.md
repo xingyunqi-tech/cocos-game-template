@@ -54,6 +54,31 @@ docs/                               开发计划、验证报告、贡献流程
 
 `assets/resources/config.json` 的 `type` 选择 `config.dev / test / prod`。模板在 oops 字段之外增加 `httpServer`、`httpTimeout`，代码中用 `getEnv()` 读取。
 
+## game-core 用法
+
+```ts
+import { bootPipeline, http, mockTransport, userSave, setSaveUser, track, createLogger } from 'db://game-core';
+
+bootPipeline.register(
+  'login',
+  async () => {
+    const res = await http.post<{ userId: string }>('auth/login', { code: 'x' }, { skipAuth: true });
+    setSaveUser(res.data.userId);
+  },
+  { weight: 2 },
+);
+
+const profile = userSave.slot('profile', { version: 1, defaults: () => ({ level: 1 }) });
+profile.update((p) => (p.level += 1));
+track('level_up', { level: profile.get().level });
+```
+
+- 启动步骤在模块顶层注册，`GameRoot` 在 oops 初始化完成后按顺序执行；用 `{ before: 'remote-config' }` / `{ after: 'login' }` 指定位置，`ctx.signal` 在步骤超时或结束后触发
+- 必需步骤失败时显示“启动失败，点击重试”，点击后重新执行整条流水线
+- 设备级数据（设置、隐私同意）用 `deviceSave`，用户存档用 `userSave`；`userSave` 在 `setSaveUser` 之前读写会告警；不要调用 `oops.storage.setUser`
+- 存档对象可长期持有，切换用户或清空后自动重新读取；值可以是对象、数组或原始类型
+- `httpMock: true` 时请求走 `mockTransport`，用 `mockTransport.on(method, path, handler)` 注册假数据
+
 ## 存储 key
 
 oops 存储接口的 key 类型为全局 `GameStorageKey`，由 `OopsFramework.TypedGameStorageKey` 推导。业务新增 key：

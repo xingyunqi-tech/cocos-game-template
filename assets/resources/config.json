@@ -10,7 +10,9 @@
       "mobileSafeArea": true,
       "stats": true,
       "httpServer": "http://127.0.0.1:3000/",
-      "httpTimeout": 10000
+      "httpTimeout": 10000,
+      "httpMock": true,
+      "logLevel": "debug"
     },
     "test": {
       "version": "0.1.0",
@@ -21,7 +23,9 @@
       "mobileSafeArea": true,
       "stats": false,
       "httpServer": "https://test-api.example.com/",
-      "httpTimeout": 10000
+      "httpTimeout": 10000,
+      "httpMock": false,
+      "logLevel": "info"
     },
     "prod": {
       "version": "0.1.0",
@@ -32,7 +36,9 @@
       "mobileSafeArea": true,
       "stats": false,
       "httpServer": "https://api.example.com/",
-      "httpTimeout": 10000
+      "httpTimeout": 10000,
+      "httpMock": false,
+      "logLevel": "warn"
     }
   },
   "gui": [

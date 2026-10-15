@@ -5,6 +5,8 @@ declare module 'db://oops-framework/module/config/GameConfig' {
     interface IConfigEnvironment {
         httpServer: string;
         httpTimeout: number;
+        httpMock: boolean;
+        logLevel: 'debug' | 'info' | 'warn' | 'error';
     }
 }
 
