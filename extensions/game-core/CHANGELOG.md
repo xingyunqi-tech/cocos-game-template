@@ -1,6 +1,6 @@
 # game-core 变更记录
 
-## 1.1.1（未发布）
+## 1.2.0（2026-10-16）
 
 - `serverTime`：单调时钟改由平台提供（`IPlatform.monotonicNow()`，小游戏用 `getPerformance` 并自动判定毫秒或微秒）；平台不提供时 `calibrated` 为 false；新增 `synced` 表示已与服务器时间同步，HTTP `Date` 头只在未同步时用于校准。`ServerTimeOptions.monotonic` 可返回 null
 - `SaveStore`：本地存档版本高于 slot 版本时读到默认值且不写入；同一存档对象中 slot key 重复注册时抛错
