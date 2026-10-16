@@ -34,6 +34,19 @@ describe('HttpClient', () => {
         expect(res.data).toEqual({ got: { a: 1 } });
     });
 
+    it('adds a JSON content type only when none is set in any letter case', async () => {
+        const seen: Array<Record<string, string>> = [];
+        const mock = new MockTransport().on('POST', '/echo', (req) => {
+            seen.push(req.headers);
+            return { body: {} };
+        });
+        await client(mock).post('echo', { a: 1 });
+        await client(mock).post('echo', 'a=1', { headers: { 'content-type': 'application/x-www-form-urlencoded' } });
+        expect(seen[0]['Content-Type']).toBe('application/json');
+        expect(seen[1]).not.toHaveProperty('Content-Type');
+        expect(seen[1]['content-type']).toBe('application/x-www-form-urlencoded');
+    });
+
     it('rejects non-2xx responses with http errors', async () => {
         const mock = new MockTransport().on('GET', '/missing', () => ({ status: 404, body: { msg: 'no' } }));
         await expect(client(mock).get('missing')).rejects.toMatchObject({ kind: 'http', status: 404 });

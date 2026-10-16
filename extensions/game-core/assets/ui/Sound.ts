@@ -14,6 +14,7 @@ export class SoundService {
     private clips: Record<string, Promise<AudioClip | null>> = {};
     private failedAt: Record<string, number> = {};
     private lastMusic: { ref: SoundRef; loop: boolean } | null = null;
+    private musicRequest = 0;
 
     clip(ref: SoundRef): Promise<AudioClip | null> {
         const key = `${ref.bundle}:${ref.path}`;
@@ -33,10 +34,12 @@ export class SoundService {
         return this.clips[key];
     }
 
-    /** 记录为当前背景音乐；音乐开关关闭时不播放并返回 false，打开开关后由 resumeMusic 播放 */
+    /** 记录为当前背景音乐；音乐开关关闭时不播放并返回 false，打开开关后由 resumeMusic 播放；加载期间被新的播放或停止取代时返回 false */
     async playMusic(ref: SoundRef, loop = true): Promise<boolean> {
         this.lastMusic = { ref, loop };
+        const request = ++this.musicRequest;
         const clip = await this.clip(ref);
+        if (request !== this.musicRequest) return false;
         if (!clip || !oops.audio?.music || !oops.audio.music.getSwitch()) return false;
         oops.audio.playMusic(clip, { loop });
         return true;
@@ -48,6 +51,7 @@ export class SoundService {
 
     stopMusic() {
         this.lastMusic = null;
+        this.musicRequest++;
         oops.audio?.music?.stop();
     }
 

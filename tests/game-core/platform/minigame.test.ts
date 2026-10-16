@@ -516,6 +516,27 @@ describe('DouyinRecorder', () => {
         }
     });
 
+    it('stops a recording requested to stop while it is starting', async () => {
+        vi.useFakeTimers();
+        try {
+            const s = recorderSetup();
+            s.manager.start.mockImplementation(() => undefined);
+            let started: boolean | undefined;
+            void s.recorder.start().then((ok) => (started = ok));
+            await expect(s.recorder.stop()).resolves.toBeNull();
+            expect(started).toBe(false);
+            s.manager.stop.mockClear();
+            s.listeners.start?.();
+            expect(s.manager.stop).toHaveBeenCalledTimes(1);
+            s.manager.start.mockImplementation(() => s.listeners.start?.());
+            await expect(s.recorder.start()).resolves.toBe(true);
+            s.advance(5000);
+            await expect(s.recorder.stop()).resolves.toBe('ttfile://video.mp4');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('reports failures and missing support', async () => {
         const s = recorderSetup();
         s.manager.start.mockImplementation(() => s.listeners.error?.({ errMsg: 'fail' }));

@@ -226,7 +226,9 @@ export class HttpClient {
         let body: string | undefined;
         if (request.body !== undefined) {
             body = typeof request.body === 'string' ? request.body : JSON.stringify(request.body);
-            headers['Content-Type'] ??= 'application/json';
+            if (!Object.keys(headers).some((name) => name.toLowerCase() === 'content-type')) {
+                headers['Content-Type'] = 'application/json';
+            }
         }
         if (token) {
             const [name, value] = this.options.authHeader?.(token) ?? ['Authorization', `Bearer ${token}`];

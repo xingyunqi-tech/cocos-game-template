@@ -43,6 +43,8 @@ export interface AuthServiceOptions {
     /** 发起登录请求时的时钟读数，传回 onServerTime */
     mark?: () => number;
     fallback?: LoginFallback;
+    /** 平台登录（wx.login / tt.login）超时，超时按网络错误处理 */
+    platformLoginTimeoutMs?: number;
     loginPath?: string;
     refreshPath?: string;
     now?: () => number;
@@ -55,6 +57,8 @@ function isOfflineError(err: unknown): boolean {
     }
     return typeof err === 'object' && err !== null && 'errMsg' in err;
 }
+
+export const PLATFORM_LOGIN_TIMEOUT_MS = 10000;
 
 function invalidResponse(): HttpError {
     return new HttpError('parse', '登录响应缺少 token 或 userId');
@@ -154,7 +158,7 @@ export class AuthService implements TokenProvider {
 
     private async loginOnline(signal: CancelSignal | undefined, switchUser: boolean): Promise<AuthSession> {
         const platform = this.options.platform();
-        const credential: LoginCredential = await platform.login();
+        const credential = await this.platformLogin(platform, signal);
         const requestStartedAt = (this.options.mark ?? this.options.now ?? Date.now)();
         const deviceId = this.options.deviceId();
         if (!credential.code && !credential.anonymousCode) credential.anonymousCode = deviceId;
@@ -186,6 +190,22 @@ export class AuthService implements TokenProvider {
         this.current = session;
         this.options.lastUser.set(session.userId);
         return session;
+    }
+
+    private async platformLogin(platform: IPlatform, signal?: CancelSignal): Promise<LoginCredential> {
+        const timeoutMs = this.options.platformLoginTimeoutMs ?? PLATFORM_LOGIN_TIMEOUT_MS;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let detach: () => void = () => undefined;
+        const guard = new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new HttpError('timeout', `平台登录超时 ${timeoutMs}ms`)), timeoutMs);
+            if (signal) detach = signal.onCancel(() => reject(new HttpError('aborted', '请求已取消')));
+        });
+        try {
+            return await Promise.race([platform.login(), guard]);
+        } finally {
+            clearTimeout(timer);
+            detach();
+        }
     }
 
     private now(): number {

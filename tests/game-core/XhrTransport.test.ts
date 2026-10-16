@@ -71,7 +71,16 @@ describe('XhrTransport', () => {
             body: '{"a":1}',
             headers: { 'content-type': 'application/json', 'x-id': '7' },
         });
-        expect(FakeXhr.last?.headers.Accept).toBe('application/json');
+        expect(FakeXhr.last?.headers).toEqual({ accept: 'application/json' });
+    });
+
+    it('sends header names in lower case so they replace mini-game adapter defaults', async () => {
+        const pending = new XhrTransport().send(
+            request({ method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer t' } }),
+        );
+        expect(FakeXhr.last?.headers).toEqual({ 'content-type': 'application/json', authorization: 'Bearer t' });
+        FakeXhr.last?.respond(200, '{}', '');
+        await pending;
     });
 
     it('times out on the JS timer even when the platform ignores xhr.timeout', async () => {

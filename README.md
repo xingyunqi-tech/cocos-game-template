@@ -127,7 +127,7 @@ track('level_up', { level: profile.get().level });
 
 `login` 步骤调用 `POST /auth/login { platform, deviceId, code | anonymousCode }`，响应 `{ token, refreshToken, userId, expiresIn, serverTime? }`（`serverTime` 为毫秒时间戳，用于校准服务器时间）；请求 401 时调用 `POST /auth/refresh { refreshToken }`，失败再重新登录。userId 不能包含冒号。
 
-登录失败时的行为由 `config.json` 的 `loginFallback` 决定：
+登录失败时的行为由 `config.json` 的 `loginFallback` 决定（平台登录 `wx.login` / `tt.login` 10 秒无响应按网络失败处理）：
 
 | 值              | 行为                                                                                  |
 | --------------- | ------------------------------------------------------------------------------------- |

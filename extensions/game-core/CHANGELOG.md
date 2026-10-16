@@ -5,6 +5,10 @@
 - `serverTime`：单调时钟改由平台提供（`IPlatform.monotonicNow()`，小游戏用 `getPerformance` 并自动判定毫秒或微秒）；平台不提供时 `calibrated` 为 false；新增 `synced` 表示已与服务器时间同步，HTTP `Date` 头只在未同步时用于校准。`ServerTimeOptions.monotonic` 可返回 null
 - `SaveStore`：本地存档版本高于 slot 版本时读到默认值且不写入；同一存档对象中 slot key 重复注册时抛错
 - `npm run new:module` 拒绝与 game-core 存档 key 冲突的模块名（`sidebar`）
+- `sound.playMusic`：加载期间被新的 `playMusic` 或 `stopMusic` 取代时不再播放
+- 抖音录屏：启动中调用 `stop()` 会中止本次录制，`start()` 返回 false
+- `HttpClient` 不区分大小写判断已有的 Content-Type；`XhrTransport` 以小写发送请求头名，覆盖小游戏 adapter 默认的 `content-type`
+- `AuthService`：平台登录（`wx.login` / `tt.login`）10 秒无响应按网络失败处理，可用 `platformLoginTimeoutMs` 调整，并响应启动步骤的取消
 
 ## 1.1.0（2026-10-16）
 

@@ -39,7 +39,8 @@ export class XhrTransport implements HttpTransport {
 
             xhr.open(request.method, request.url, true);
             xhr.timeout = request.timeoutMs;
-            for (const [name, value] of Object.entries(request.headers)) xhr.setRequestHeader(name, value);
+            for (const [name, value] of Object.entries(request.headers))
+                xhr.setRequestHeader(name.toLowerCase(), value);
             xhr.onload = () =>
                 finish(() =>
                     resolve({

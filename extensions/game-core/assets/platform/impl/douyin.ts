@@ -90,6 +90,12 @@ export class DouyinRecorder implements IRecorder {
     stop(): Promise<string | null> {
         const manager = this.getManager();
         if (!manager) return Promise.resolve(null);
+        if (this.state === 'starting') {
+            this.state = 'idle';
+            this.pendingStart?.(false);
+            this.pendingStart = null;
+            return Promise.resolve(null);
+        }
         if (this.state !== 'recording') {
             const video = this.lastVideo;
             this.lastVideo = null;

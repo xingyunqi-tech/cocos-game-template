@@ -9,6 +9,7 @@ interface SetupOptions {
     credential?: LoginCredential;
     lastUser?: string;
     loginError?: Record<string, unknown>;
+    loginHangs?: boolean;
     fallback?: LoginFallback;
 }
 
@@ -34,9 +35,11 @@ function setup(options: SetupOptions = {}) {
     const platform = {
         name: 'wechat',
         login: () =>
-            options.loginError
-                ? Promise.reject(Object.assign(new Error('login:fail'), options.loginError))
-                : Promise.resolve({ ...credential }),
+            options.loginHangs
+                ? new Promise(() => undefined)
+                : options.loginError
+                  ? Promise.reject(Object.assign(new Error('login:fail'), options.loginError))
+                  : Promise.resolve({ ...credential }),
     } as unknown as IPlatform;
     const auth = new AuthService({
         http,
@@ -46,6 +49,7 @@ function setup(options: SetupOptions = {}) {
         onUser,
         onWarn,
         fallback: options.fallback ?? 'last-user',
+        platformLoginTimeoutMs: 20,
         now: () => 1000,
     });
     http.configure({ tokenProvider: auth });
@@ -132,6 +136,21 @@ describe('AuthService last-user fallback', () => {
         const s = setup({ lastUser: 'old' });
         s.mock.on('POST', '/auth/login', () => ({ delayMs: 1000 }));
         await expect(s.auth.login()).resolves.toEqual({ userId: 'old', offline: true });
+    });
+
+    it('enters offline with the last user when the platform login never answers', async () => {
+        const s = setup({ lastUser: 'old', loginHangs: true });
+        await expect(s.auth.login()).resolves.toEqual({ userId: 'old', offline: true });
+        expect(s.onUser).toHaveBeenCalledWith('old');
+    });
+
+    it('rejects a hanging platform login with aborted when cancelled', async () => {
+        const s = setup({ lastUser: 'old', loginHangs: true });
+        const cancel = new CancelSource();
+        const pending = s.auth.login(cancel.signal);
+        cancel.cancel();
+        await expect(pending).rejects.toMatchObject({ kind: 'aborted' });
+        expect(s.onUser).not.toHaveBeenCalled();
     });
 
     it('fails the first login when offline', async () => {
