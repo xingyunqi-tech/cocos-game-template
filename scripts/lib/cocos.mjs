@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
-import { createWriteStream, readFileSync, statSync } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
+import { createWriteStream, existsSync, readFileSync, statSync } from 'node:fs';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12,6 +12,11 @@ export const PLATFORMS = {
     web: 'web-mobile',
     wechat: 'wechatgame',
     douyin: 'bytedance-mini-game',
+};
+
+export const APPIDS = {
+    wechat: { env: 'WECHAT_APPID', placeholder: 'touristappid' },
+    douyin: { env: 'DOUYIN_APPID', placeholder: 'testappId' },
 };
 
 export const EXIT_SUCCESS = 36;
@@ -70,12 +75,39 @@ export function judgeBuild(exitCode, log) {
     return { ok: exitCode === EXIT_SUCCESS && errors.length === 0, exitCode, errors };
 }
 
-export async function runBuild(platform, { debug = false, logFile } = {}) {
+export function loadLocalEnv(file = join(ROOT, '.env.local')) {
+    if (existsSync(file)) process.loadEnvFile(file);
+}
+
+export function resolveBuildConfig(platform, env = process.env) {
     const target = PLATFORMS[platform];
     if (!target) throw new Error(`未知平台：${platform}，可选 ${Object.keys(PLATFORMS).join(' / ')}`);
-    const options = [`platform=${target}`, `debug=${debug}`];
-    const configPath = join(ROOT, 'build-configs', `${platform}.json`);
-    if (isFile(configPath)) options.push(`configPath=${configPath}`);
+    const file = join(ROOT, 'build-configs', `${platform}.json`);
+    const config = isFile(file) ? JSON.parse(readFileSync(file, 'utf8')) : { platform: target };
+    const appid = APPIDS[platform];
+    if (!appid) return { config, placeholder: false };
+    const value = env[appid.env]?.trim();
+    config.packages = {
+        ...config.packages,
+        [target]: { ...config.packages?.[target], appid: value || appid.placeholder },
+    };
+    return { config, placeholder: !value };
+}
+
+export async function runBuild(platform, { debug = false, allowPlaceholderAppid = false, logFile } = {}) {
+    const target = PLATFORMS[platform];
+    const { config, placeholder } = resolveBuildConfig(platform);
+    if (placeholder) {
+        const message = `${platform} 未设置 ${APPIDS[platform].env}，AppID 为占位值 ${APPIDS[platform].placeholder}`;
+        if (!debug && !allowPlaceholderAppid) {
+            throw new Error(`${message}；发布构建需设置真实 AppID，或加 --allow-placeholder-appid`);
+        }
+        console.warn(`! ${message}`);
+    }
+    const configPath = join(ROOT, 'temp', 'build-configs', `${platform}.json`);
+    await mkdir(dirname(configPath), { recursive: true });
+    await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+    const options = [`platform=${target}`, `debug=${debug}`, `configPath=${configPath}`];
     await mkdir(dirname(logFile), { recursive: true });
     const out = createWriteStream(logFile);
     let log = '';

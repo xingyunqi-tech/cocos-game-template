@@ -151,39 +151,47 @@ cocos-game-template/
 
 ### 4.2 平台适配（platform）
 
-实现选择使用 `cc/env` 编译常量（`WECHAT`、`BYTEDANCE`，已对照引擎 3.8.8 `cc.config.json` 核实），构建时剔除其他平台代码。
+实现选择使用 `cc/env` 常量（`WECHAT`、`BYTEDANCE`，已对照引擎 3.8.8 `cc.config.json` 核实），运行时只实例化当前平台实现。`cc/env` 在项目脚本中是运行时导入，Cocos 也不对项目脚本做 tree-shaking，三端实现会同时打进各端包体（批次 4 构建核实）。
 
 ```ts
 interface IPlatform {
-  readonly name: string; // 'web' | 'wechat' | 'douyin'，预留其他快游戏
+  readonly name: 'web' | 'wechat' | 'douyin';
+  readonly ads: AdProvider;                    // 由 AdService 包装，业务用 ads.showRewarded(placement)
+  readonly sidebar: ISidebar;
   login(): Promise<{ code?: string; anonymousCode?: string }>;
   checkSession(): Promise<boolean>;
-  getLaunchOptions(): LaunchOptions;           // 含 scene、query、抖音 launch_from / location
+  getLaunchOptions(): LaunchOptions;           // 含 scene、query、抖音 launchFrom / location
+  getShowOptions(): LaunchOptions;             // 最近一次 onShow 参数（侧边栏判断用）
   onShow(cb: (opts: LaunchOptions) => void): () => void;
   share(opts: ShareOptions): Promise<'success' | 'fail' | 'unknown'>; // 微信固定 unknown
-  setShareMenu(opts: ShareOptions): void;
+  setShareMenu(opts: ShareOptions): void;      // 重复调用替换上一次的监听
   getSystemInfo(): SystemInfo;                 // 微信用 getWindowInfo/getDeviceInfo/getAppBaseInfo
-  getTopInset(): { safeTop: number; menuRect?: Rect };
+  getTopInset(): { safeTop: number; menuRect?: Rect }; // 窗口逻辑像素
   getNetworkType(): Promise<NetworkType>;
-  onNetworkChange(cb: (online: boolean) => void): () => void;
+  onNetworkChange(cb: (online: boolean, type: NetworkType) => void): () => void;
   vibrate(type: 'short' | 'long'): void;
-  setClipboard(text: string): Promise<void>;
-  getPrivacySetting(): Promise<{ needAuthorization: boolean }>;
-  openPrivacyContract(): void;
-  onUpdateReady(cb: () => void): void;
+  setClipboard(text: string): Promise<boolean>;
+  getPrivacySetting(): Promise<{ supported: boolean; needAuthorization: boolean }>; // 查询失败按需要授权处理
+  openPrivacyContract(): Promise<boolean>;
+  onNeedPrivacyAuthorization(handler: (resolve: (agree: boolean) => void, exposed: () => void) => void): boolean;
+  onUpdateReady(cb: () => void): () => void;
+  onUpdateFailed(cb: () => void): () => void;
   applyUpdate(): void;
-  onError(cb: (err: unknown) => void): void;
+  installErrorHooks(reporter: ErrorReporter): () => void; // onError / onUnhandledRejection / onMemoryWarning
   getEnvVersion(): 'develop' | 'trial' | 'release';
+  getStorageUsage(): { currentKB: number; limitKB: number } | null;
 }
 
-interface IAds {
-  showRewarded(placement: string): Promise<{ result: 'completed' | 'skipped' | 'failed'; reason?: string }>;
-  showInterstitial(placement: string): Promise<{ result: 'shown' | 'failed'; reason?: string }>;
+interface AdService {                  // core 导出的 ads
+  configure(units: { rewarded?: Record<string, string>; interstitial?: Record<string, string>; policy?: Partial<AdPolicyOptions> }): void;
+  showRewarded(placement: string): Promise<{ result: 'completed' | 'skipped' | 'failed'; reason?: AdFailReason; errCode?: number }>;
+  showInterstitial(placement: string): Promise<{ result: 'shown' | 'failed'; reason?: AdFailReason; errCode?: number }>;
 }
+// AdFailReason: unsupported | not_configured | busy | frequency | load_failed | show_failed
 
 interface ISidebar {                 // 抖音必接
   isSupported(): Promise<boolean>;   // tt.checkScene
-  open(): void;                      // tt.navigateToScene
+  open(): Promise<boolean>;          // tt.navigateToScene
   isLaunchedFromSidebar(opts: LaunchOptions): boolean;
 }
 ```
@@ -192,10 +200,10 @@ interface ISidebar {                 // 抖音必接
 
 - `share()` 在触摸回调中同步调用平台 API（抖音要求）
 - 分享不发奖励
-- 广告统一频控（抖音插屏：启动 30s 内不展示、两次插屏间隔 ≥ 60s、激励视频后间隔 ≥ 60s；实例成功展示后销毁重建，失败时同实例重新 load）
+- 广告统一频控（抖音插屏：启动 30s 内不展示、两次插屏间隔 ≥ 60s、激励视频后间隔 ≥ 60s，间隔从广告关闭时算起；错误码 2002 后 30s 内不展示；实例成功展示后销毁重建，失败时同实例重新 load；展示后出错而未关闭时按失败结束）
 - 抖音实现必须包含 `tt.navigateToScene` 的静态调用，否则上传预检拦截
 - 抖音顶部避让使用 `tt.getMenuButtonLayout`；抖音隐私只使用 `tt.onNeedPrivacyAuthorization`（基础库 4.17.0，运行时能力检测），`getPrivacySetting`、`openPrivacyContract` 返回降级结果
-- Web 广告：dev 或 GM 开关下返回 completed，prod 返回 failed
+- Web 广告：调试构建（`DEBUG`）返回 completed，可改 `platform.ads.mode` 模拟其他结果；发布构建返回 failed / unsupported
 - 低频能力放 `IPlatformExtra`
 - `IPayment` 只定义 `pay(item)` 与服务端发货回调约定；微信 iOS 走 `wx.requestVirtualPayment`，抖音 Android 走 `tt.requestGamePayment`、iOS 走钻石兑换（P2 实施前核实）
 
@@ -206,7 +214,7 @@ interface ISidebar {                 // 抖音必接
 - mock：dev 可切换，示例游戏默认 mock
 - 可选：WebSocket、TSRPC 客户端
 
-**登录接口约定**（交给后端）：`POST /auth/login { platform, code | anonymousCode } → { token, refreshToken, userId, expiresIn }`；`POST /auth/refresh { refreshToken } → { token, expiresIn }`。
+**登录接口约定**（交给后端）：`POST /auth/login { platform, deviceId, code | anonymousCode } → { token, refreshToken, userId, expiresIn }`，userId 不含冒号；`POST /auth/refresh { refreshToken } → { token, expiresIn, refreshToken? }`。登录失败回退由 `config.json` 的 `loginFallback` 决定：`guest`（默认，上次 userId 或设备游客）、`last-user`（仅网络失败且有上次 userId）。
 
 ### 4.4 存档（save）
 
@@ -347,10 +355,10 @@ interface ISidebar {                 // 抖音必接
 
 | 任务 | 产出物 | 完成标准 | 依赖 |
 |---|---|---|---|
-| `IPlatform` + 三端实现 | `platform/impl/{web,wechat,douyin}` | 三端真机调用全部接口无报错；Web 构建产物不含 `wx.`/`tt.` 代码 | M1a |
+| `IPlatform` + 三端实现 | `platform/impl/{web,wechat,douyin}` | 三端真机调用全部接口无报错；运行时只实例化当前平台实现 | M1a |
 | 登录接入 | `platform` + `net` | 后端就绪时真机拿到 token；未就绪时 mock 通过 | 前置 #4 |
 | `IAds` + 频控 | `ads/*` | 三种结果与失败原因可区分；频控单测通过 | 前置 #5 |
-| 抖音侧边栏 | `platform/impl/douyin/sidebar`、主界面入口 | 上传预检通过；按官方方法验证复访奖励 | M1a |
+| 抖音侧边栏 | `platform/impl/douyin.ts`（`DouyinSidebar`）、主界面入口 | 上传预检通过；按官方方法验证复访奖励 | M1a |
 | 错误钩子、网络、更新 | `platform` | 断网提示出现与消失正确；更新弹窗可应用 | M1a |
 | 隐私流程 | `compliance/privacy` | 同意、拒绝两条路径都可继续游戏 | M1a |
 | 通用 UI | `ui/*` | 设置、协议页、确认框、顶部避让在三端截图验收 | M1a |

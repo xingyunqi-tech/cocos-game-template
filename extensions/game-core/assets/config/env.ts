@@ -7,6 +7,7 @@ declare module 'db://oops-framework/module/config/GameConfig' {
         httpTimeout: number;
         httpMock: boolean;
         logLevel: 'debug' | 'info' | 'warn' | 'error';
+        loginFallback?: 'guest' | 'last-user';
     }
 }
 

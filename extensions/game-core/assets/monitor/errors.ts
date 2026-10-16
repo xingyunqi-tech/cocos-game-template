@@ -1,4 +1,4 @@
-export type ErrorSource = 'global' | 'promise' | 'resource' | 'http' | 'boot' | 'manual';
+export type ErrorSource = 'global' | 'promise' | 'resource' | 'memory' | 'http' | 'boot' | 'manual';
 
 export interface ErrorReport {
     source: ErrorSource;

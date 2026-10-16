@@ -12,7 +12,8 @@
       "httpServer": "http://127.0.0.1:3000/",
       "httpTimeout": 10000,
       "httpMock": true,
-      "logLevel": "debug"
+      "logLevel": "debug",
+      "loginFallback": "guest"
     },
     "test": {
       "version": "0.1.0",
@@ -25,7 +26,8 @@
       "httpServer": "https://test-api.example.com/",
       "httpTimeout": 10000,
       "httpMock": false,
-      "logLevel": "info"
+      "logLevel": "info",
+      "loginFallback": "guest"
     },
     "prod": {
       "version": "0.1.0",
@@ -38,7 +40,8 @@
       "httpServer": "https://api.example.com/",
       "httpTimeout": 10000,
       "httpMock": false,
-      "logLevel": "warn"
+      "logLevel": "warn",
+      "loginFallback": "guest"
     }
   },
   "gui": [

@@ -1,5 +1,23 @@
 # game-core 变更记录
 
+## 0.3.0（未发布）
+
+- `platform`：`IPlatform` 的 Web、微信、抖音实现，按 `cc/env` 的 `WECHAT`、`BYTEDANCE` 选择；登录、会话检查、启动与 onShow 参数（启动时同步注册 onShow）、分享与分享菜单（重复设置替换监听）、系统信息、顶部避让（安全区与状态栏取大值，微信胶囊、抖音 `tt.getMenuButtonLayout`）、网络类型与变化、震动、剪贴板、隐私接口（曝光上报；查询失败按需要授权处理；抖音基础库低于 4.17.0 时不注册监听）、版本更新与下载失败、平台错误与内存告警钩子、envVersion、存储用量
+- `ads`：`AdService` 按广告位映射广告单元，区分 `unsupported`、`not_configured`、`busy`、`frequency`、`load_failed`、`show_failed`；`AdPolicy` 频控（启动 30s 内不展示插屏、插屏间隔 60s、激励视频后 60s、错误码 2002 退避 30s，间隔从关闭时算起）；抖音插屏展示后销毁重建，展示失败同实例重新加载；展示后出错未关闭时按失败结束；Web 调试构建模拟成功，发布构建返回 `unsupported`
+- `sidebar`：抖音侧边栏 `isSupported`（`tt.checkScene`）、`open`（`tt.navigateToScene`）、按场景值与 `launch_from`/`location` 识别侧边栏进入
+- `auth`：启动步骤 `login`（超时 30s）调用 `POST /auth/login`（附 `deviceId`），成功后以 userId 设置 `userSave` 作用域；401 时 `POST /auth/refresh`，失败或无会话时重新登录；`loginFallback` 为 `guest`（默认）时登录失败以上次 userId 或 `guest-<设备 ID>` 进入，为 `last-user` 时仅网络失败且有上次 userId 才离线进入；离线后网络恢复自动重新登录，userId 不一致时本局不切换存档；`httpMock` 下内置按设备 ID 生成稳定 userId 的登录与刷新 mock
+- `network`：在线状态变化时回调；`appUpdate`：新版本就绪、下载失败回调与应用
+- 错误上报与埋点公共参数附 `platform`、`envVersion`；存储用量达到上限 80% 时告警（`checkStorageUsage(ratio)`）
+- `ErrorSource` 增加 `memory`
+
+### 项目侧资源
+
+- `assets/resources/config.json` 各环境新增 `loginFallback`
+
+### 构建
+
+- `npm run build` 从环境变量 `WECHAT_APPID`、`DOUYIN_APPID`（可写入 `.env.local`）注入 AppID，未设置时使用占位值 `touristappid`、`testappId`；发布构建遇到占位值失败，`--allow-placeholder-appid` 放行
+
 ## 0.2.0（未发布）
 
 - `bootPipeline`：启动步骤注册（权重、可选、超时、`before`/`after` 定位），步骤上下文提供 `signal`，进度与每步耗时，失败上报；必需步骤失败显示可重试的兜底提示

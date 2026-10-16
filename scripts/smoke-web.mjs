@@ -86,7 +86,7 @@ const checks = [];
 const consoleLines = [];
 page.on('console', (msg) => consoleLines.push(msg.text()));
 try {
-    await page.goto(`http://127.0.0.1:${port}/`);
+    await page.goto(`http://127.0.0.1:${port}/?smoke=1`);
     await page.waitForFunction(() => Boolean(window.oops?.gui?.root), null, { timeout: Number(values.timeout) });
     checks.push('oops 初始化完成');
 
@@ -163,6 +163,53 @@ try {
     });
     if (saved.before !== null || saved.after === null) throw new Error(`切后台未落盘：${JSON.stringify(saved)}`);
     checks.push('切后台时存档立即落盘');
+    const platform = await page.evaluate(async () => {
+        const { platform, auth, userSave, ads, network, sidebar } = window.gameCore;
+        const slot = userSave.slot('smoke', { version: 1, defaults: () => ({ n: 0 }) });
+        slot.set({ n: 2 });
+        userSave.flush();
+        const userKey = Object.keys(localStorage).find((k) => k.startsWith('gc:u:') && k.endsWith(':smoke'));
+        slot.reset();
+        return {
+            name: platform.name,
+            envVersion: platform.getEnvVersion(),
+            userId: auth.userId,
+            hasToken: Boolean(auth.getToken()),
+            userKey,
+            rewarded: await ads.showRewarded('smoke'),
+            online: network.online,
+            sidebar: await sidebar.isSupported(),
+            launchQuery: platform.getLaunchOptions().query,
+        };
+    });
+    if (platform.name !== 'web') throw new Error(`平台识别错误：${platform.name}`);
+    checks.push(`平台 ${platform.name}（${platform.envVersion}）`);
+    if (!platform.userId.startsWith('mock-') || !platform.hasToken)
+        throw new Error(`登录失败：${JSON.stringify(platform)}`);
+    if (!consoleLines.some((line) => line.includes('登录成功'))) throw new Error('启动流水线未执行登录步骤');
+    checks.push(`Mock 登录成功，userId ${platform.userId}`);
+    if (platform.userKey !== `gc:u:${platform.userId}:smoke`)
+        throw new Error(`用户存档未按 userId 隔离：${platform.userKey}`);
+    checks.push('用户存档按 userId 隔离');
+    if (platform.rewarded.result !== 'completed')
+        throw new Error(`Web 调试广告结果不符：${JSON.stringify(platform.rewarded)}`);
+    checks.push('Web 调试激励广告返回 completed');
+    if (!platform.online || platform.sidebar) throw new Error(`网络或侧边栏状态不符：${JSON.stringify(platform)}`);
+    checks.push('网络在线；Web 不支持侧边栏');
+    if (platform.launchQuery.smoke !== '1') throw new Error(`启动参数未解析：${JSON.stringify(platform.launchQuery)}`);
+    checks.push('启动参数从 URL 解析');
+
+    const offline = await page.evaluate(async () => {
+        const seen = [];
+        const off = window.gameCore.network.onChange((online) => seen.push(online));
+        window.dispatchEvent(new Event('offline'));
+        window.dispatchEvent(new Event('online'));
+        off();
+        return seen;
+    });
+    if (offline.join() !== 'false,true') throw new Error(`断网事件未上报：${JSON.stringify(offline)}`);
+    checks.push('断网与恢复事件均触发');
+
     if (values.screenshot) await page.screenshot({ path: values.screenshot });
 } catch (err) {
     pageErrors.push(`检查失败：${err.message}`);
