@@ -3,9 +3,10 @@ import { DEBUG, HTML5, MINIGAME } from 'cc/env';
 import { EventMessage } from 'db://oops-framework/core/common/event/EventMessage';
 import { oops } from 'db://oops-framework/core/Oops';
 import { BootPipeline } from './boot/BootPipeline';
-import { Lifecycle } from './boot/Lifecycle';
+import { Lifecycle, UserReady, type UserReadyListener } from './boot/Lifecycle';
 import { getEnv } from './config/env';
-import { RemoteConfig } from './config/RemoteConfig';
+import { RemoteConfig, type RemoteSettingsMap } from './config/RemoteConfig';
+import { assertReleasable, unloadBundle } from './config/Bundles';
 import { Tables } from './config/Tables';
 import { SoundService, type SoundRef } from './ui/Sound';
 import { AdService } from './ads/AdService';
@@ -39,10 +40,7 @@ import { Settings } from './ui/Settings';
 import { openSettings } from './ui/SettingsPanel';
 import { createSidebarEntry } from './ui/SidebarEntry';
 
-export interface CoreRemoteSettings {
-    reviewMode: boolean;
-    shareReward: boolean;
-}
+export type CoreRemoteSettings = RemoteSettingsMap;
 
 const storage = () => sys.localStorage as KeyValueStore;
 const localStore: KeyValueStore = {
@@ -70,7 +68,7 @@ export const payment = new PaymentService((item, result) =>
 );
 export const deviceSave = new SaveStore({ store: localStore, prefix: 'gc:d', onWarn: saveWarn });
 export const userSave = new SaveStore({ store: localStore, prefix: 'gc:u', requireScope: true, onWarn: saveWarn });
-export const remoteConfig = new RemoteConfig<CoreRemoteSettings>({ reviewMode: false, shareReward: false });
+export const remoteConfig = new RemoteConfig<RemoteSettingsMap>({ reviewMode: false, shareReward: false });
 
 export const coreOptions = {
     /** 启动时显示健康游戏忠告加载页 */
@@ -241,6 +239,13 @@ function flushSidebarListeners() {
 }
 
 export const sound = new SoundService();
+
+/** 释放业务 Bundle：停止来自该 Bundle 的背景音乐、丢弃音频缓存，再释放全部资源；未加载时返回 false，引擎内置 Bundle 抛错 */
+export function releaseBundle(name: string): boolean {
+    assertReleasable(name);
+    sound.forgetBundle(name);
+    return unloadBundle(name);
+}
 setButtonClickHook(() => {
     if (coreOptions.clickSound) void sound.playEffect(coreOptions.clickSound);
 });
@@ -310,6 +315,13 @@ export const coreUi = {
         }),
 };
 
+const userReady = new UserReady((err) => reportError(err, 'manual', { from: 'onUserReady' }));
+
+/** 登录步骤完成（含离线进入）或离线进入后重新联网登录成功时回调；注册时已就绪则立即回调；启动重试时可能再次回调 */
+export function onUserReady(listener: UserReadyListener): () => void {
+    return userReady.on(listener);
+}
+
 export const auth = new AuthService({
     http,
     platform: () => platform,
@@ -325,6 +337,7 @@ export const auth = new AuthService({
     onUser: (userId) => setSaveUser(userId),
     onWarn: (message, detail) => log.warn(message, detail),
     onServerTime: (serverMs, startedAt) => serverTime.sync(serverMs, startedAt),
+    onRecovered: (userId) => userReady.emit({ userId, offline: false }),
     mark: () => serverTime.mark(),
 });
 
@@ -336,6 +349,7 @@ bootPipeline.register(
         log.debug('userId', outcome.userId);
         track('login', { offline: outcome.offline });
         flushSidebarListeners();
+        userReady.emit({ userId: outcome.userId, offline: outcome.offline });
     },
     { timeoutMs: LOGIN_STEP_TIMEOUT_MS },
 );
@@ -361,7 +375,7 @@ bootPipeline.register(
 
 interface RemoteCache {
     key: string;
-    values: Partial<CoreRemoteSettings>;
+    values: Partial<RemoteSettingsMap>;
 }
 
 const remoteCache = deviceSave.slot<RemoteCache | null>('remote-config', { version: 2, defaults: () => null });
@@ -371,16 +385,16 @@ function remoteCacheKey(): string {
     return `${platform.name}|${env.version}|${env.httpServer}`;
 }
 
-function cachedRemoteConfig(): Partial<CoreRemoteSettings> | null {
+function cachedRemoteConfig(): Partial<RemoteSettingsMap> | null {
     const cached = remoteCache.get();
     return cached && cached.key === remoteCacheKey() ? cached.values : null;
 }
 
 /** 远程配置：按 platform、version、envVersion 拉取，成功后缓存 */
-export function fetchRemoteConfig(path: string): Promise<Partial<CoreRemoteSettings>> {
+export function fetchRemoteConfig(path: string): Promise<Partial<RemoteSettingsMap>> {
     const env = getEnv();
     return http
-        .get<Partial<CoreRemoteSettings>>(
+        .get<Partial<RemoteSettingsMap>>(
             path,
             {
                 platform: platform.name,

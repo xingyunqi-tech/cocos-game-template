@@ -120,6 +120,7 @@ track('level_up', { level: profile.get().level });
 - 启动步骤在模块顶层注册，`GameRoot` 在 oops 初始化完成后按顺序执行；用 `{ before: 'remote-config' }` / `{ after: 'login' }` 指定位置（锚点可以是其他模块注册的步骤，执行时解析，与脚本加载顺序无关；同一锚点的多个步骤按注册顺序排列；锚点缺失或循环依赖时启动失败），`ctx.signal` 在步骤超时或结束后触发
 - 必需步骤失败时显示“启动失败，点击重试”，点击后重新执行整条流水线；业务入口抛错时同样显示，点击后重新调用入口，入口需可重复执行
 - 设备级数据（设置、隐私同意）用 `deviceSave`，用户存档用 `userSave`；`login` 步骤完成后 `userSave` 已切到当前用户；不要调用 `oops.storage.setUser`
+- `onUserReady(({ userId, offline }) => …)` 在登录步骤完成（含离线进入）以及离线进入后重新联网登录成功时回调，注册时已就绪则立即回调，启动重试时可能再次回调；适合按用户初始化或补单
 - 存档对象可长期持有，切换用户或清空后自动重新读取；值可以是对象、数组或原始类型
 - `httpMock: true` 时请求走 `mockTransport`，用 `mockTransport.on(method, path, handler)` 注册假数据
 
@@ -203,7 +204,7 @@ coreUi.setConfirm((options) => openMyDialog(options)); // 替换模板内全部�
 | `gm`                                  | `true`                 | 调试构建显示 GM 按钮                                              |
 
 - 界面由代码构建，样式在 `THEME`；`addButton`、`addLabel`、`openModal` 等构建函数可直接复用
-- 顶部避让：`assets/resources/config.json` 的 `mobileSafeArea` 保持 `false`，顶部 UI 挂 `SafeTopAdapter` 组件或按 `getDesignInset().top` 下移（`safeTop` 只避开刘海，适合与胶囊同一行的左侧元素）
+- 顶部避让：`assets/resources/config.json` 的 `mobileSafeArea` 保持 `false`，顶部 UI 挂 `SafeTopAdapter` 组件（节点有纵向对齐的 Widget 时调整其 top / verticalCenter / bottom，支持百分比，否则下移坐标）或按 `getDesignInset().top` 下移（`safeTop` 只避开刘海，适合与胶囊同一行的左侧元素）
 - 隐私：`privacy.needAuthorization()` 预判是否需要授权；`useCustomPrompt` 须在任何隐私接口调用前注册；同意或拒绝都可继续游戏；抖音无法打开平台指引时显示游戏内隐私政策
 - 侧边栏：登录完成前从侧边栏进入的，`onSidebarLaunch` 在登录后回调；同一次进入可能回调多次，用 `sidebarReward.claim()` 判重
 - 启动加载页在 LayerSystem 并拦截输入；启动步骤中需要交互的界面用 `coreUi.confirm`，或先 `await healthNotice.hide()`

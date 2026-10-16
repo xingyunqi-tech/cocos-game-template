@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Lifecycle } from 'db://game-core/boot/Lifecycle';
-import { RemoteConfig } from 'db://game-core/config/RemoteConfig';
+import { Lifecycle, UserReady } from 'db://game-core/boot/Lifecycle';
+import { RemoteConfig, type RemoteSettingsMap } from 'db://game-core/config/RemoteConfig';
 import { ErrorReporter, installWebErrorHooks, type ErrorSink } from 'db://game-core/monitor/errors';
 import { LogHub, type LogSink } from 'db://game-core/monitor/logger';
 import { Tracker } from 'db://game-core/monitor/track';
@@ -157,5 +157,49 @@ describe('RemoteConfig fallback', () => {
             ),
         ).resolves.toBe('defaults');
         expect(config.all()).toEqual({ a: 1, b: 2 });
+    });
+});
+
+declare module 'db://game-core/config/RemoteConfig' {
+    interface RemoteSettingsMap {
+        testDailyLimit: number;
+    }
+}
+
+describe('RemoteConfig defaults', () => {
+    it('accepts defaults for keys added by declaration merging and keeps remote values first', async () => {
+        const config = new RemoteConfig<RemoteSettingsMap>({ reviewMode: false, shareReward: false });
+        expect(config.get('testDailyLimit')).toBeUndefined();
+        config.setDefaults({ testDailyLimit: 3 });
+        expect(config.get('testDailyLimit')).toBe(3);
+        await config.load(() => Promise.resolve({ testDailyLimit: 5 }));
+        config.setDefaults({ testDailyLimit: 4, reviewMode: true });
+        expect(config.all()).toEqual({ reviewMode: true, shareReward: false, testDailyLimit: 5 });
+        await config.load();
+        expect(config.get('testDailyLimit')).toBe(4);
+    });
+});
+
+describe('UserReady', () => {
+    it('notifies listeners, replays the current state to late listeners and isolates errors', () => {
+        const onError = vi.fn();
+        const ready = new UserReady(onError);
+        const early = vi.fn();
+        ready.on(() => {
+            throw new Error('bad');
+        });
+        const off = ready.on(early);
+        expect(ready.current).toBeNull();
+        ready.emit({ userId: 'guest-d', offline: true });
+        expect(early).toHaveBeenCalledWith({ userId: 'guest-d', offline: true });
+        expect(onError).toHaveBeenCalledTimes(1);
+        const late = vi.fn();
+        ready.on(late);
+        expect(late).toHaveBeenCalledWith({ userId: 'guest-d', offline: true });
+        off();
+        ready.emit({ userId: 'guest-d', offline: false });
+        expect(early).toHaveBeenCalledTimes(1);
+        expect(late).toHaveBeenLastCalledWith({ userId: 'guest-d', offline: false });
+        expect(ready.current).toEqual({ userId: 'guest-d', offline: false });
     });
 });

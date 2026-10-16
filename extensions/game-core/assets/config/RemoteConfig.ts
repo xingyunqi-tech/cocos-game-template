@@ -2,12 +2,30 @@ export type RemoteFetcher<T> = () => Promise<Partial<T>>;
 
 export type RemoteSource = 'defaults' | 'cache' | 'remote';
 
+/** 远程配置项；业务用 declare module 'db://game-core/config/RemoteConfig' 扩展，并用 remoteConfig.setDefaults 提供默认值 */
+export interface RemoteSettingsMap {
+    /** 审核模式，模板不读取，供业务在审核期间隐藏功能 */
+    reviewMode: boolean;
+    /** 分享奖励开关，模板不读取，供业务使用 */
+    shareReward: boolean;
+}
+
+/** 未提供默认值且远程未下发的配置项读到 undefined */
 export class RemoteConfig<T extends object> {
+    private readonly defaults: Partial<T>;
+    private overrides: Partial<T> = {};
     private values: T;
     private currentSource: RemoteSource = 'defaults';
 
-    constructor(private readonly defaults: T) {
-        this.values = { ...defaults };
+    constructor(defaults: Partial<T>) {
+        this.defaults = { ...defaults };
+        this.values = { ...defaults } as T;
+    }
+
+    /** 补充或修改默认值，在模块顶层调用；已加载的远程值仍优先 */
+    setDefaults(values: Partial<T>) {
+        Object.assign(this.defaults, values);
+        this.values = { ...this.defaults, ...this.overrides } as T;
     }
 
     get<K extends keyof T>(key: K): T[K] {
@@ -28,8 +46,7 @@ export class RemoteConfig<T extends object> {
         timeoutMs = 3000,
         fallback?: () => Partial<T> | null,
     ): Promise<RemoteSource> {
-        this.values = { ...this.defaults };
-        this.currentSource = 'defaults';
+        this.apply({}, 'defaults');
         if (!fetcher) return this.currentSource;
         let timer: ReturnType<typeof setTimeout> | undefined;
         try {
@@ -39,15 +56,19 @@ export class RemoteConfig<T extends object> {
                     timer = setTimeout(() => reject(new Error('远程配置超时')), timeoutMs);
                 }),
             ]);
-            this.values = { ...this.defaults, ...remote };
-            this.currentSource = 'remote';
+            this.apply(remote, 'remote');
         } catch {
             const cached = fallback?.();
-            this.currentSource = cached ? 'cache' : 'defaults';
-            if (cached) this.values = { ...this.defaults, ...cached };
+            if (cached) this.apply(cached, 'cache');
         } finally {
             clearTimeout(timer);
         }
         return this.currentSource;
+    }
+
+    private apply(overrides: Partial<T>, source: RemoteSource) {
+        this.overrides = { ...overrides };
+        this.values = { ...this.defaults, ...this.overrides } as T;
+        this.currentSource = source;
     }
 }

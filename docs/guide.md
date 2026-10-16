@@ -82,6 +82,7 @@ bootPipeline.register(
 );
 ```
 - 按需加载：`loadBundle(name)`、`loadAsset(bundle, path, Type)`
+- 释放：`releaseBundle(name)` 停止来自该 Bundle 的背景音乐、丢弃 `sound` 的音频缓存，再释放 Bundle 内全部资源并移除 Bundle；释放后仍在使用其资源的界面需先关闭；`resources`、`main` 等引擎内置 Bundle 不能释放
 - 包体检查按 `game.json` 的分包分别统计；微信普通分包不限大小、总包 ≤ 30MB，抖音单个分包与总包 ≤ 20MB
 
 远程 Bundle：把目录 meta 的 `bundleConfigID` 改为 `remote`，构建时设置 `REMOTE_SERVER`（以 `/` 结尾），把构建产物的 `remote/` 上传到该地址（`REMOTE_UPLOAD_COMMAND`）。服务器需允许跨域（Web）并加入小游戏 downloadFile 合法域名。本地验证可用任意带 CORS 头的静态服务器作为 `REMOTE_SERVER`。小游戏不允许加载远程代码，远程 Bundle 中的脚本仍会打进本地包，只有资源走远程。
@@ -155,3 +156,16 @@ bootPipeline.register(
 - `track(event, params)` 埋点，`reportError(err, source)` 错误上报；公共参数含版本、平台、envVersion
 - `config.json` 的 `trackPath` 非空时批量上报到该接口（20 条或 10 秒一批，切后台立即发送），错误以 `error` 事件上报；上报请求携带登录 token，401 时不刷新 token，与网络错误、5xx 一样指数退避重试，退避期间不提前发送；其他 4xx 以及 2xx 但响应解析失败或业务校验失败时丢弃该批
 - `remoteConfigPath` 非空时启动拉取远程配置，失败使用上次缓存，再失败使用默认值
+- 业务配置项扩展 `RemoteSettingsMap` 并在模块顶层提供默认值，`remoteConfig.get` 类型自动推导；未提供默认值且远程未下发的项读到 `undefined`：
+
+```ts
+declare module 'db://game-core/config/RemoteConfig' {
+    interface RemoteSettingsMap {
+        dailyAdLimit: number;
+    }
+}
+remoteConfig.setDefaults({ dailyAdLimit: 5 });
+const limit = remoteConfig.get('dailyAdLimit');
+```
+
+- 内置的 `reviewMode`、`shareReward` 模板不读取，供业务使用

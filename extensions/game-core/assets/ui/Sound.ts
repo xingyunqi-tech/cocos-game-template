@@ -55,6 +55,18 @@ export class SoundService {
         oops.audio?.music?.stop();
     }
 
+    /** 丢弃该 Bundle 的音频缓存并归还引用；当前背景音乐来自该 Bundle 时停止播放 */
+    forgetBundle(bundle: string) {
+        if (this.lastMusic?.ref.bundle === bundle) this.stopMusic();
+        const prefix = `${bundle}:`;
+        for (const key of Object.keys(this.clips)) {
+            if (!key.startsWith(prefix)) continue;
+            void this.clips[key].then((clip) => clip?.decRef(false));
+            delete this.clips[key];
+        }
+        for (const key of Object.keys(this.failedAt)) if (key.startsWith(prefix)) delete this.failedAt[key];
+    }
+
     async playEffect(ref: SoundRef): Promise<boolean> {
         const clip = await this.clip(ref);
         if (!clip || !oops.audio) return false;

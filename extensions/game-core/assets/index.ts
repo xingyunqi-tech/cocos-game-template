@@ -4,9 +4,11 @@ export { GameRoot, CONFIG_LOAD_ATTEMPTS, CONFIG_PATH } from './boot/GameRoot';
 export { BootPipeline, BootStepError } from './boot/BootPipeline';
 export type { StepContext, StepOptions, StepResult, StepRun } from './boot/BootPipeline';
 export { Lifecycle } from './boot/Lifecycle';
+export type { UserReadyListener, UserState } from './boot/Lifecycle';
 export { retry } from './boot/retry';
 export { getEnv } from './config/env';
 export { RemoteConfig } from './config/RemoteConfig';
+export type { RemoteSettingsMap } from './config/RemoteConfig';
 export { Tables, TableStore } from './config/Tables';
 export { loadAsset, loadBundle, preloadBundle } from './config/Bundles';
 export { SoundService } from './ui/Sound';
@@ -40,8 +42,10 @@ export {
     LOGIN_STEP_TIMEOUT_MS,
     mockTransport,
     network,
+    onUserReady,
     payment,
     platform,
+    releaseBundle,
     remoteConfig,
     serverTime,
     sound,

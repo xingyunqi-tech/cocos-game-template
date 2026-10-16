@@ -13,6 +13,10 @@
 - 启动流水线：`before` / `after` 改为执行时解析，锚点可以晚于本步骤注册；同一锚点的多个步骤按注册顺序排列；锚点缺失或循环依赖时 `run()` 与 `stepNames` 抛错；同时指定 `before` 与 `after` 时注册抛错
 - 业务入口抛错时显示“启动失败，点击重试”，点击后重新调用入口，成功后不再调用
 - `smoke:web` 覆盖启动步骤失败后点击重试
+- 远程配置：`RemoteSettingsMap` 可由业务 `declare module` 扩展，`remoteConfig.setDefaults()` 提供默认值；`RemoteConfig` 构造参数改为 `Partial<T>`；`CoreRemoteSettings` 保留为 `RemoteSettingsMap` 的别名
+- `onUserReady(listener)`：登录步骤完成（含离线进入）或离线进入后重新联网登录成功时回调；`AuthService` 新增 `offline`、`onRecovered`
+- `releaseBundle(name)`：停止来自该 Bundle 的背景音乐、丢弃音频缓存并释放 Bundle；`sound.forgetBundle(name)`
+- `SafeTopAdapter`：节点有纵向对齐的 Widget 时调整 top / verticalCenter / bottom（含百分比），不再改坐标被 Widget 覆盖
 
 ## 1.1.0（2026-10-16）
 

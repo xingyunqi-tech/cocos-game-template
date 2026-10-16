@@ -43,3 +43,19 @@ export function loadAsset<T extends Asset>(
             }),
     );
 }
+
+const BUILTIN_BUNDLES: readonly string[] = ['resources', 'main', 'internal', 'start-scene'];
+
+export function assertReleasable(name: string) {
+    if (BUILTIN_BUNDLES.includes(name)) throw new Error(`引擎内置 Bundle ${name} 不能释放`);
+}
+
+/** 释放 Bundle 内全部资源并移除 Bundle；未加载时返回 false，引擎内置 Bundle 抛错 */
+export function unloadBundle(name: string): boolean {
+    assertReleasable(name);
+    const bundle = assetManager.getBundle(name);
+    if (!bundle) return false;
+    bundle.releaseAll();
+    assetManager.removeBundle(bundle);
+    return true;
+}

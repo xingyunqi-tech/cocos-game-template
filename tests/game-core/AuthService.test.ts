@@ -31,6 +31,7 @@ function setup(options: SetupOptions = {}) {
     let last = options.lastUser ?? '';
     const onUser = vi.fn();
     const onWarn = vi.fn();
+    const onRecovered = vi.fn();
     let credential = options.credential ?? { code: 'c' };
     const platform = {
         name: 'wechat',
@@ -48,6 +49,7 @@ function setup(options: SetupOptions = {}) {
         lastUser: { get: () => last, set: (id) => (last = id) },
         onUser,
         onWarn,
+        onRecovered,
         fallback: options.fallback ?? 'last-user',
         platformLoginTimeoutMs: 20,
         now: () => 1000,
@@ -59,6 +61,7 @@ function setup(options: SetupOptions = {}) {
         http,
         onUser,
         onWarn,
+        onRecovered,
         lastUser: () => last,
         setCredential: (c: LoginCredential) => (credential = c),
     };
@@ -226,6 +229,25 @@ describe('AuthService session recovery', () => {
         s.mock.on('GET', '/me', ({ headers }) => (headers.Authorization ? { body: { ok: true } } : { status: 401 }));
         await expect(s.http.get('me')).resolves.toMatchObject({ data: { ok: true } });
         expect(s.auth.session?.token).toBe('tok');
+    });
+
+    it('reports recovery once after an offline entry and not after an online login', async () => {
+        const s = setup({ lastUser: 'old' });
+        await s.auth.login();
+        expect(s.auth.offline).toBe(false);
+        await s.auth.refresh();
+        expect(s.onRecovered).not.toHaveBeenCalled();
+        s.mock.on('POST', '/auth/login', () => ({ status: 503 }));
+        await expect(s.auth.login()).resolves.toMatchObject({ offline: true });
+        expect(s.auth.offline).toBe(true);
+        s.mock.on('POST', '/auth/login', () => ({
+            body: { token: 'tok', refreshToken: 'r', userId: 'u-c', expiresIn: 60 },
+        }));
+        await expect(s.auth.reconnect()).resolves.toBe(true);
+        expect(s.auth.offline).toBe(false);
+        expect(s.onRecovered).toHaveBeenCalledWith('u-c');
+        await s.auth.refresh();
+        expect(s.onRecovered).toHaveBeenCalledTimes(1);
     });
 
     it('reconnects once while offline and keeps the save scope when the user differs', async () => {

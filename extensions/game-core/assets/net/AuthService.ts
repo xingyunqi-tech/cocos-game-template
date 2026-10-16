@@ -40,6 +40,8 @@ export interface AuthServiceOptions {
     onUser?: (userId: string) => void;
     onWarn?: (message: string, detail: Record<string, unknown>) => void;
     onServerTime?: (serverMs: number, requestStartedAt: number) => void;
+    /** 离线进入后重新登录成功时回调 */
+    onRecovered?: (userId: string) => void;
     /** 发起登录请求时的时钟读数，传回 onServerTime */
     mark?: () => number;
     fallback?: LoginFallback;
@@ -68,6 +70,7 @@ export class AuthService implements TokenProvider {
     private current: AuthSession | null = null;
     private activeUser = '';
     private reconnecting: Promise<boolean> | null = null;
+    private offlineEntry = false;
 
     constructor(private readonly options: AuthServiceOptions) {}
 
@@ -84,6 +87,11 @@ export class AuthService implements TokenProvider {
         return this.activeUser;
     }
 
+    /** 离线进入且尚未重新登录成功 */
+    get offline(): boolean {
+        return this.offlineEntry;
+    }
+
     async login(signal?: CancelSignal): Promise<LoginOutcome> {
         try {
             const session = await this.loginOnline(signal, true);
@@ -93,6 +101,7 @@ export class AuthService implements TokenProvider {
             const userId = this.fallbackUser(err);
             if (!userId) throw err;
             this.current = null;
+            this.offlineEntry = true;
             this.options.onUser?.(userId);
             this.activeUser = userId;
             this.options.onWarn?.('登录失败，离线进入', { error: err instanceof Error ? err.message : String(err) });
@@ -189,6 +198,9 @@ export class AuthService implements TokenProvider {
         }
         this.current = session;
         this.options.lastUser.set(session.userId);
+        const recovered = this.offlineEntry && !switchUser;
+        this.offlineEntry = false;
+        if (recovered) this.options.onRecovered?.(this.activeUser);
         return session;
     }
 

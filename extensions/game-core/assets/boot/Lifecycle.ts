@@ -58,3 +58,45 @@ export class Lifecycle {
         }
     }
 }
+
+export interface UserState {
+    /** 存档使用的 userId，离线进入时为回退身份 */
+    userId: string;
+    offline: boolean;
+}
+
+export type UserReadyListener = (state: Readonly<UserState>) => void;
+
+/** 用户就绪：登录步骤完成或离线进入后重新联网时回调；注册时已就绪则立即回调 */
+export class UserReady {
+    private state: UserState | null = null;
+    private listeners: UserReadyListener[] = [];
+
+    constructor(private readonly onError: (err: unknown) => void = (err) => console.error(err)) {}
+
+    get current(): Readonly<UserState> | null {
+        return this.state;
+    }
+
+    on(listener: UserReadyListener): () => void {
+        this.listeners.push(listener);
+        if (this.state) this.call(listener, this.state);
+        return () => {
+            this.listeners = this.listeners.filter((l) => l !== listener);
+        };
+    }
+
+    emit(state: UserState) {
+        this.state = { ...state };
+        const current = this.state;
+        for (const listener of this.listeners.slice()) this.call(listener, current);
+    }
+
+    private call(listener: UserReadyListener, state: Readonly<UserState>) {
+        try {
+            listener(state);
+        } catch (err) {
+            this.onError(err);
+        }
+    }
+}
