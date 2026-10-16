@@ -18,11 +18,10 @@ import { SidebarReward } from './compliance/SidebarReward';
 import { errorReporter, reportError } from './monitor/errors';
 import { createLogger, logHub } from './monitor/logger';
 import { track, tracker } from './monitor/track';
-import { TrackUploader } from './monitor/TrackUploader';
+import { isPermanentUploadError, TrackUploader } from './monitor/TrackUploader';
 import { AuthService } from './net/AuthService';
 import { HttpClient } from './net/HttpClient';
 import { MockTransport } from './net/MockTransport';
-import { HttpError } from './net/types';
 import { XhrTransport } from './net/XhrTransport';
 import type { KeyValueStore } from './save/KeyValueStore';
 import { AppUpdate } from './platform/AppUpdate';
@@ -506,13 +505,9 @@ export function initGameCore() {
     if (env.trackPath) {
         const path = env.trackPath;
         const uploader = new TrackUploader({
-            send: (records) => http.post(path, { events: records }, { retries: 0 }).then(() => undefined),
-            isPermanent: (err) =>
-                !(err instanceof HttpError) ||
-                (err.kind === 'http' &&
-                    (err.status ?? 0) >= 400 &&
-                    (err.status ?? 0) < 500 &&
-                    ![408, 429].includes(err.status ?? 0)),
+            send: (records) =>
+                http.post(path, { events: records }, { retries: 0, skipRefresh: true }).then(() => undefined),
+            isPermanent: isPermanentUploadError,
         });
         tracker.addSink((event) => uploader.push(event));
         errorReporter.addSink((report) =>

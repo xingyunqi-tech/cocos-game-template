@@ -8,6 +8,7 @@
 - `sound.playMusic`：加载期间被新的 `playMusic` 或 `stopMusic` 取代时不再播放
 - 抖音录屏：启动中调用 `stop()` 会中止本次录制，`start()` 返回 false
 - `HttpClient` 不区分大小写判断已有的 Content-Type；`XhrTransport` 以小写发送请求头名，覆盖小游戏 adapter 默认的 `content-type`
+- 埋点上报：发送失败后的退避期间不再因满批立即发送；上报请求带 `skipRefresh`（新增 `HttpRequest.skipRefresh`：携带 token，401 时不刷新、不重新登录），401 改为退避重试；2xx 但响应解析或业务校验失败时丢弃该批，不再重发
 - `AuthService`：平台登录（`wx.login` / `tt.login`）10 秒无响应按网络失败处理，可用 `platformLoginTimeoutMs` 调整，并响应启动步骤的取消
 
 ## 1.1.0（2026-10-16）

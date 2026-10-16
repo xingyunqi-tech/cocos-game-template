@@ -200,7 +200,7 @@ export class HttpClient {
         try {
             return await this.send(request, used);
         } catch (err) {
-            if (!(err instanceof HttpError) || err.status !== 401) throw err;
+            if (!(err instanceof HttpError) || err.status !== 401 || request.skipRefresh) throw err;
             const current = provider.getToken();
             const token = current && current !== used ? current : await this.refreshToken(provider);
             if (!token) throw err;

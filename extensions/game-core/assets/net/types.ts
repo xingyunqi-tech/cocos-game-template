@@ -16,6 +16,8 @@ export interface HttpRequest {
     timeoutMs?: number;
     retries?: number;
     skipAuth?: boolean;
+    /** 携带当前 token，但 401 时不刷新、不重新登录 */
+    skipRefresh?: boolean;
     signal?: CancelSignal;
 }
 

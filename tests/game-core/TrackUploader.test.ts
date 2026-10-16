@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { TrackUploader, type UploadRecord } from 'db://game-core/monitor/TrackUploader';
+import { isPermanentUploadError, TrackUploader, type UploadRecord } from 'db://game-core/monitor/TrackUploader';
+import { HttpError } from 'db://game-core/net/types';
 
 const record = (event: string): UploadRecord => ({ event, params: {}, time: 0 });
 
@@ -94,6 +95,52 @@ describe('TrackUploader', () => {
         expect(delays.slice(-2)).toEqual([2000, 4000]);
     });
 
+    it('waits for the backoff timer instead of sending each full batch after a failure', async () => {
+        const timer = manualTimer();
+        const send = vi.fn<(records: UploadRecord[]) => Promise<void>>(() => Promise.reject(new Error('offline')));
+        const uploader = new TrackUploader({ send, batchSize: 2, ...timer });
+        uploader.push(record('a'));
+        uploader.push(record('b'));
+        await uploader.flush();
+        expect(send).toHaveBeenCalledTimes(1);
+        for (const e of ['c', 'd', 'e', 'f']) uploader.push(record(e));
+        expect(send).toHaveBeenCalledTimes(1);
+        expect(timer.armed()).toBe(true);
+        send.mockImplementation(() => Promise.resolve());
+        timer.fire();
+        await uploader.flush();
+        expect(send).toHaveBeenCalledTimes(2);
+        uploader.push(record('g'));
+        await uploader.flush();
+        expect(send).toHaveBeenCalledTimes(3);
+    });
+
+    it('schedules the next send from the result of an in-flight retry', async () => {
+        const delays: number[] = [];
+        let release!: () => void;
+        const send = vi.fn<(records: UploadRecord[]) => Promise<void>>(() => Promise.reject(new Error('offline')));
+        const uploader = new TrackUploader({
+            send,
+            batchSize: 1,
+            intervalMs: 1000,
+            schedule: (_fn, ms) => {
+                delays.push(ms);
+                return delays.length;
+            },
+            cancelSchedule: () => undefined,
+        });
+        uploader.push(record('a'));
+        await uploader.flush();
+        expect(delays).toEqual([2000]);
+        send.mockImplementation(() => new Promise<void>((resolve) => (release = resolve)));
+        const retry = uploader.flush();
+        uploader.push(record('b'));
+        expect(delays).toEqual([2000]);
+        release();
+        await retry;
+        expect(delays).toEqual([2000, 1000]);
+    });
+
     it('keeps records when send throws synchronously', async () => {
         const uploader = new TrackUploader({
             send: () => {
@@ -119,5 +166,20 @@ describe('TrackUploader', () => {
         await uploader.flush();
         await uploader.flush();
         expect(send).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe('isPermanentUploadError', () => {
+    it('drops batches on client errors, answered responses and non-HTTP errors', () => {
+        expect(isPermanentUploadError(new Error('serialize'))).toBe(true);
+        expect(isPermanentUploadError(new HttpError('http', 'bad', 400))).toBe(true);
+        expect(isPermanentUploadError(new HttpError('http', 'forbidden', 403))).toBe(true);
+        expect(isPermanentUploadError(new HttpError('parse', 'not json', 200))).toBe(true);
+        expect(isPermanentUploadError(new HttpError('business', 'rejected', 200))).toBe(true);
+        for (const status of [401, 408, 429, 500, 503]) {
+            expect(isPermanentUploadError(new HttpError('http', 'x', status))).toBe(false);
+        }
+        expect(isPermanentUploadError(new HttpError('network', 'offline'))).toBe(false);
+        expect(isPermanentUploadError(new HttpError('timeout', 'slow'))).toBe(false);
     });
 });

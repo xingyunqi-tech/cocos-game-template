@@ -1,3 +1,15 @@
+import { HttpError } from '../net/types';
+
+const RETRYABLE_CLIENT_STATUS: readonly number[] = [401, 408, 429];
+
+/** 上报失败是否丢弃该批：非 HTTP 错误、服务端已响应的解析或业务错误、除 401、408、429 外的 4xx 丢弃，其余退避重试 */
+export function isPermanentUploadError(err: unknown): boolean {
+    if (!(err instanceof HttpError)) return true;
+    if (err.kind === 'parse' || err.kind === 'business') return true;
+    const status = err.status ?? 0;
+    return err.kind === 'http' && status >= 400 && status < 500 && !RETRYABLE_CLIENT_STATUS.includes(status);
+}
+
 export interface UploadRecord {
     event: string;
     params: Record<string, unknown>;
@@ -16,7 +28,7 @@ export interface TrackUploaderOptions {
     cancelSchedule?: (handle: unknown) => void;
 }
 
-/** 埋点批量上报：满 batchSize 条或到达间隔时发送；失败的记录放回队列并退避，永久错误丢弃该批；超过 maxBuffer 丢弃最旧的 */
+/** 埋点批量上报：满 batchSize 条或到达间隔时发送；失败的记录放回队列并退避（退避期间不因满批提前发送），永久错误丢弃该批；超过 maxBuffer 丢弃最旧的 */
 export class TrackUploader {
     private buffer: UploadRecord[] = [];
     private timer: unknown = null;
@@ -33,7 +45,7 @@ export class TrackUploader {
         this.buffer.push(record);
         const max = this.options.maxBuffer ?? 500;
         if (this.buffer.length > max) this.buffer.splice(0, this.buffer.length - max);
-        if (this.buffer.length >= (this.options.batchSize ?? 20)) void this.flush();
+        if (this.failures === 0 && this.buffer.length >= (this.options.batchSize ?? 20)) void this.flush();
         else this.arm();
     }
 
@@ -84,7 +96,7 @@ export class TrackUploader {
     }
 
     private arm() {
-        if (this.timer !== null) return;
+        if (this.timer !== null || this.sending) return;
         const schedule = this.options.schedule ?? ((fn, ms) => setTimeout(fn, ms));
         this.timer = schedule(() => {
             this.timer = null;

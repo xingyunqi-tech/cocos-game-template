@@ -153,5 +153,5 @@ bootPipeline.register(
 ## 14. 监控
 
 - `track(event, params)` 埋点，`reportError(err, source)` 错误上报；公共参数含版本、平台、envVersion
-- `config.json` 的 `trackPath` 非空时批量上报到该接口（20 条或 10 秒一批，切后台立即发送），错误以 `error` 事件上报
+- `config.json` 的 `trackPath` 非空时批量上报到该接口（20 条或 10 秒一批，切后台立即发送），错误以 `error` 事件上报；上报请求携带登录 token，401 时不刷新 token，与网络错误、5xx 一样指数退避重试，退避期间不提前发送；其他 4xx 以及 2xx 但响应解析失败或业务校验失败时丢弃该批
 - `remoteConfigPath` 非空时启动拉取远程配置，失败使用上次缓存，再失败使用默认值

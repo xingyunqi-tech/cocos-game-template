@@ -105,6 +105,19 @@ describe('HttpClient', () => {
         await expect(client(mock, { tokenProvider: provider }).get('me')).rejects.toMatchObject({ status: 401 });
     });
 
+    it('sends the token but does not refresh on 401 when skipRefresh is set', async () => {
+        const seen: string[] = [];
+        const refresh = vi.fn(() => Promise.resolve('new'));
+        const mock = new MockTransport().on('POST', '/track', (req) => {
+            seen.push(req.headers.Authorization ?? 'none');
+            return { status: 401 };
+        });
+        const http = client(mock, { tokenProvider: { getToken: () => 'old', refresh } });
+        await expect(http.post('track', {}, { skipRefresh: true })).rejects.toMatchObject({ status: 401 });
+        expect(seen).toEqual(['Bearer old']);
+        expect(refresh).not.toHaveBeenCalled();
+    });
+
     it('skips auth headers when skipAuth is set', async () => {
         const seen: string[] = [];
         const mock = new MockTransport().on('POST', '/login', (req) => {
