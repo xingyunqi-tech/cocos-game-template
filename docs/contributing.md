@@ -33,6 +33,12 @@ npm run build -- web --debug && npm run smoke:web
 - Cocos 构建使用 Babel loose 模式，对 Set、Map 等非数组可迭代对象使用展开语法（`[...set]`）会得到错误结果；改用 `Array.from(set)`。单测环境发现不了这类问题，依赖 `npm run smoke:web` 覆盖
 - 平台无关的逻辑写成不依赖 `cc` 的纯 TS 模块，便于 Vitest 覆盖
 
+## game-core 结构
+
+- 单例在 `wiring/services.ts`，功能装配按 `services → sidebar → ui / auth / remote → core.ts` 单向依赖，`wiring/` 下的模块不 import `core.ts`
+- 启动步骤由 `core.ts` 按顺序调用注册函数，不在模块顶层注册
+- 新增 `.ts` 文件后执行一次构建（或用编辑器打开项目）生成 `.meta`，与源码一起提交
+
 ## 注释与命名
 
 - 注释只描述当前代码，不写变更历史

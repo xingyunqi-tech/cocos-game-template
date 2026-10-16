@@ -20,6 +20,14 @@
 - 结构：`core.ts` 只负责装配与启动步骤注册顺序，单例与功能拆到 `wiring/`（`services`、`sidebar`、`ui`、`auth`、`remote`、`mocks`），公开接口不变；读取 oops `GameConfig` 内部字段收敛为 `config/env.ts` 的 `gameConfigData()`
 - 远程配置缓存 key 增加 envVersion（升级后首次启动的旧缓存失效一次）
 
+### 迁移
+
+- 自定义 `IPlatform` 实现需增加 `monotonicNow()`
+- 同一存档对象中重复调用 `slot(key)` 会抛错，在函数内创建 slot 的代码改为模块顶层创建一次
+- 多个启动步骤以同一锚点 `after` 时改为按注册顺序排列
+- `SafeTopAdapter` 所在节点有纵向对齐的 Widget 时调整 Widget 对齐值，不再改坐标
+- `XhrTransport` 以小写发送请求头名
+
 ## 1.1.0（2026-10-16）
 
 - `payment`：`IPayment` 接口（`pay(item)` 返回成功、失败、待确认与原因，可选 `queryOrder`），`PaymentService` 拒绝并发支付、120 秒未回调返回 `pending`、支持 GM 模拟；三端默认 `unsupported`

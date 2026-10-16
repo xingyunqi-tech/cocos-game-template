@@ -101,10 +101,11 @@ cocos-game-template/
 │   └─ game-core/               # 模板核心插件，语义化版本
 │       ├─ package.json         # asset-db.mount → ./assets
 │       ├─ CHANGELOG.md
-│       └─ assets/
-│           ├─ boot/  platform/  ads/  net/  save/  config/
-│           ├─ ui/  compliance/  monitor/  debug/   # 脚本，不设为 bundle
-│           ├─ res/             # Asset Bundle `game-core`：只放 prefab、贴图等资源
+│       └─ assets/                 # 只有脚本，不设为 bundle；自有界面用代码构建
+│           ├─ boot/  platform/  ads/  net/  save/  config/  payment/  time/
+│           ├─ ui/  compliance/  monitor/  debug/  types/
+│           ├─ wiring/          # 单例与功能装配：services、sidebar、ui、auth、remote、mocks
+│           ├─ core.ts          # 装配入口：启动步骤注册顺序、initGameCore，重新导出 wiring
 │           └─ index.ts         # 公开入口
 ├─ assets/
 │   ├─ resources/               # config.json 等必须位于项目 resources 的资源
@@ -136,14 +137,16 @@ cocos-game-template/
 
 - `game-core` 每次发版打 tag（`core-vX.Y.Z`）并更新 CHANGELOG，破坏性变更升主版本并附迁移说明
 - 下游执行 `scripts/update-core.sh <version>` 替换 `extensions/game-core/`，项目侧资源变更按 CHANGELOG 手工合入
-- `npm run check:plugins` 校验 `oops-plugin-framework` 与 `game-core` 未被本地修改；模板仓库内只锁定 oops，`game-core` 的锁定快照在 M4 首次发版时生成并随版本分发
+- `npm run check:plugins` 校验 `oops-plugin-framework` 与 `game-core` 未被本地修改；`game-core` 的锁定快照随版本生成并分发（当前锁定 1.1.0；版本号为 `-dev` 时只提示差异）
 
 ## 4. game-core 模块设计
 
 ### 4.1 启动与生命周期（boot）
 
 - 流水线：`Splash（健康忠告） → 隐私监听注册 → 预加载 → 登录 → 远程配置 → 主场景`
-- `registerStep(name, fn, { weight, optional, timeoutMs })` 注册，驱动进度条，步骤耗时上报
+- `bootPipeline.register(name, run, { weight, optional, timeoutMs, before, after })` 注册，驱动进度条，步骤耗时上报；`before` / `after` 在执行时解析，同一锚点按注册顺序
+- 业务入口 `setGameEntry` 抛错时显示“启动失败，点击重试”，点击后重新调用入口
+- `onUserReady` 在登录步骤完成（含离线进入）与离线后重新登录成功时回调
 - 隐私不阻塞启动：只注册监听，调用隐私接口时由平台弹窗
 - config 加载失败：重试上限 3 次后兜底提示
 - 版本更新：`onUpdateReady` 到达后弹窗确认并 `applyUpdate()`
@@ -159,6 +162,7 @@ interface IPlatform {
   readonly name: 'web' | 'wechat' | 'douyin';
   readonly ads: AdProvider;                    // 由 AdService 包装，业务用 ads.showRewarded(placement)
   readonly sidebar: ISidebar;
+  readonly recorder: IRecorder;                // 抖音录屏，其他平台 supported 为 false
   login(): Promise<{ code?: string; anonymousCode?: string }>;
   checkSession(): Promise<boolean>;
   getLaunchOptions(): LaunchOptions;           // 含 scene、query、抖音 launchFrom / location
@@ -181,6 +185,7 @@ interface IPlatform {
   installErrorHooks(reporter: ErrorReporter): () => void; // onError / onUnhandledRejection / onMemoryWarning
   getEnvVersion(): 'develop' | 'trial' | 'release';
   getStorageUsage(): { currentKB: number; limitKB: number } | null;
+  monotonicNow(): number | null;               // 单调时钟（毫秒）；小游戏用 getPerformance 并在首次调用时判定毫秒或微秒
 }
 
 interface AdService {                  // core 导出的 ads
@@ -193,7 +198,8 @@ interface AdService {                  // core 导出的 ads
 interface IPayment {                 // core 导出的 payment 包装：并发拒绝、GM 模拟
   readonly supported: boolean;
   pay(item: { productId: string; price: number; title?: string; extra?: Record<string, unknown> }):
-    Promise<{ result: 'success' | 'failed'; orderId?: string; reason?: 'unsupported' | 'cancelled' | 'order_failed' | 'pay_failed' | 'busy' }>;
+    Promise<{ result: 'success' | 'failed' | 'pending'; orderId?: string; reason?: 'unsupported' | 'not_logged_in' | 'cancelled' | 'order_failed' | 'pay_failed' | 'busy' | 'timeout' }>;
+  queryOrder?(orderId: string): Promise<PayResult>; // pending 订单与登录后补单
 }
 
 interface ISidebar {                 // 抖音必接
@@ -211,7 +217,7 @@ interface ISidebar {                 // 抖音必接
 - 抖音实现必须包含 `tt.navigateToScene` 的静态调用，否则上传预检拦截
 - 抖音顶部避让使用 `tt.getMenuButtonLayout`；抖音隐私只使用 `tt.onNeedPrivacyAuthorization`（基础库 4.17.0，运行时能力检测），`getPrivacySetting`、`openPrivacyContract` 返回降级结果
 - Web 广告：调试构建（`DEBUG`）返回 completed，可改 `platform.ads.mode` 模拟其他结果；发布构建返回 failed / unsupported
-- 低频能力放 `IPlatformExtra`
+- 低频能力扩展接口 `IPlatformExtra` 尚未定义
 - `IPayment` 只定义 `pay(item)` 与服务端发货回调约定（批次 9 已定义，三端默认返回 unsupported）；微信 iOS 走 `wx.requestVirtualPayment`，抖音 Android 走 `tt.requestGamePayment`、iOS 走钻石兑换（P2 实施前核实）
 
 ### 4.3 网络（net）
@@ -220,6 +226,10 @@ interface ISidebar {                 // 抖音必接
 - baseURL 写入 `config.json` 的环境扩展字段，构建脚本只改写 `type`
 - mock：dev 可切换，示例游戏默认 mock
 - 可选：WebSocket、TSRPC 客户端
+
+- 平台登录（`wx.login` / `tt.login`）10 秒无响应按网络失败处理，走 `loginFallback`
+- `XhrTransport` 以小写发送请求头名，覆盖小游戏 adapter 默认的 `content-type: application/x-www-form-urlencoded`
+- 请求选项 `skipRefresh`：携带 token，401 时不刷新、不重新登录（埋点上报使用）
 
 **登录接口约定**（交给后端）：`POST /auth/login { platform, deviceId, code | anonymousCode } → { token, refreshToken, userId, expiresIn }`，userId 不含冒号；`POST /auth/refresh { refreshToken } → { token, expiresIn, refreshToken? }`。登录失败回退由 `config.json` 的 `loginFallback` 决定：`guest`（默认，上次 userId 或设备游客）、`last-user`（仅网络失败且有上次 userId）。
 
@@ -230,13 +240,15 @@ interface ISidebar {                 // 抖音必接
 - 写入节流；`GAME_HIDE` 同步落盘
 - 接近平台上限时告警（微信单 key 1MB、总量 10MB）
 - 清空按前缀删除，禁止 `sys.localStorage.clear()`
+- 同一存档对象中 slot key 只能注册一次；本地存档版本高于代码时读默认值且不写入
 - 不承担防作弊；`ICloudSave` 预留，冲突以服务端版本号判定
 
 ### 4.5 配置（config）
 
 - 环境：扩展 oops `IConfigEnvironment`
 - 配置表：`Tables.get<T>(name, id)`
-- 远程配置：M1a 本地默认值实现，M4 接远端；键维度 `platform + version + envVersion`；审核期默认关闭分享奖励、互推入口
+- 远程配置：`remoteConfigPath` 非空时启动拉取（附 `platform`、`version`、`envVersion`），失败用缓存（键为 platform、envVersion、version、httpServer），再失败用默认值；业务扩展 `RemoteSettingsMap` 并用 `remoteConfig.setDefaults` 提供默认值；内置 `reviewMode`、`shareReward` 模板不读取，审核期行为由业务决定
+- Bundle：`loadBundle`、`preloadBundle`、`loadAsset`；`releaseBundle` 同时清理 `sound` 的音频缓存，引擎内置 Bundle 不能释放
 
 ### 4.6 通用 UI（ui）
 
@@ -244,7 +256,7 @@ interface ISidebar {                 // 抖音必接
 - 确认框 `coreUi.confirm`（System 层）、断网横幅（Notify 层，自动随网络状态显示）
 - 设置面板 `coreUi.openSettings`（Dialog 层）：音乐音效读写 `oops.audio`，震动开关存设备级 key
 - 隐私政策、用户协议页 `coreUi.openDocument`（System 层，可滚动）；微信隐私政策页附《小游戏隐私保护指引》入口
-- 顶部避让：`getDesignInset()` 把平台安全区与胶囊位置换算为设计分辨率，内容放在胶囊下方；Web 用默认内边距 20；`SafeTopAdapter` 组件挂在顶部节点上自动下移；oops 的 `mobileSafeArea` 关闭，避免与之叠加
+- 顶部避让：`getDesignInset()` 把平台安全区与胶囊位置换算为设计分辨率，内容放在胶囊下方；Web 用默认内边距 20；`SafeTopAdapter` 组件挂在顶部节点上自动下移（节点有纵向对齐的 Widget 时调整其对齐值，含百分比）；oops 的 `mobileSafeArea` 关闭，避免与之叠加
 - 抖音侧边栏入口 `coreUi.createSidebarEntry(parent)`（平台不支持时不创建）+ `sidebarReward` 复访奖励（每天一次）+ `onSidebarLaunch`
 - 版本更新就绪时弹窗确认后应用
 - 以上界面用代码构建节点，`coreOptions` 可关闭断网横幅、更新弹窗、健康忠告加载页
@@ -264,7 +276,7 @@ interface ISidebar {                 // 抖音必接
 ### 4.8 监控与调试（monitor / debug）
 
 - Logger：debug / info / warn / error，prod 保留 warn 以上
-- `track(event, params)`：M1a 接口 + 控制台实现，M4 接服务
+- `track(event, params)`：`trackPath` 非空时批量上报（20 条或 10 秒一批，切后台发送），失败指数退避且退避期间不提前发送，401 不刷新 token，2xx 但响应解析或业务校验失败时丢弃该批
 - 错误上报：JS 异常、未处理 Promise、资源失败、接口错误、内存告警，附平台、版本、envVersion
 - GM 面板（仅 dev）：切换环境、清空存档、模拟广告、模拟侧边栏进入、FPS / DrawCall
 
@@ -453,6 +465,8 @@ interface ISidebar {                 // 抖音必接
 | 7 M3 联调与提审 | 微信体验版、抖音提审、修正 | 团队为主 | 两端审核通过 |
 | 8 M4 + M5 | P1 完善、`game-core` v1.0.0 与升级演练、文档 | 开发 + 团队（埋点、CI） | §9 验收 12 条通过 |
 | 9 M6 模板补充 | prefab 界面范例、业务 Bundle 与分包、远程 Bundle 范例、音频、内购接口、服务器时间、横屏说明、多语言（可选） | 开发（制作 prefab 时需打开编辑器） | §9 验收第 13–16 条通过；Web 冒烟覆盖新增范例；game-core 发布 1.1.0 |
+
+| 10 代码审查优化 | A 数据正确性（小游戏单调时钟、新版本存档保护、slot 重名）；B 竞态与平台适配（音乐竞态、录屏启动中停止、请求头大小写、平台登录超时）；C 埋点退避与鉴权循环；D 启动锚点执行时解析、业务入口失败重试；E 远程配置扩展、`onUserReady`、`releaseBundle`、SafeTopAdapter 纵向 Widget；F 拆分 `core.ts` 为 `wiring/` | 开发 | 已完成（`49ba84e`、`ad00ef2`、`d1e9130`、`75f592b`、`267a4b8`、`7361185`）；verify、Web 冒烟通过；涉及平台行为的项待批次 7 真机确认；未发版，CHANGELOG 记在「1.1.1（未发布）」 |
 
 批次 3 中不依赖引擎的部分（HttpClient、存档迁移、频控）可在 S0 结束后与批次 2 并行；批次 7 审核等待期间可并行批次 8 中不依赖审核结果的任务。
 
