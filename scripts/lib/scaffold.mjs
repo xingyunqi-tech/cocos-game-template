@@ -1,5 +1,8 @@
 const NAME = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
+/** game-core 在 userSave 中已占用的 slot key */
+export const RESERVED_SLOT_KEYS = ['sidebar'];
+
 export function pascalCase(name) {
     return name.replace(/(^|-)([a-z0-9])/g, (_, __, c) => c.toUpperCase());
 }
@@ -14,6 +17,8 @@ export function moduleFiles(name) {
     if (!NAME.test(name)) throw new Error(`模块名 ${name} 只能是小写字母、数字与连字符，如 shop、daily-task`);
     const Pascal = pascalCase(name);
     const camel = camelCase(name);
+    if (RESERVED_SLOT_KEYS.includes(camel))
+        throw new Error(`模块名 ${name} 与 game-core 的存档 key 冲突，请换一个名字`);
     return {
         [`${Pascal}Model.ts`]: `import { userSave } from 'db://game-core';
 

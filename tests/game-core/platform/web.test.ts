@@ -94,6 +94,8 @@ describe('WebPlatform', () => {
         const platform = new WebPlatform(host(), { debug: true });
         expect(platform.getTopInset()).toEqual({ safeTop: 0 });
         expect(platform.getStorageUsage()).toBeNull();
+        expect(platform.monotonicNow()).toBeNull();
+        expect(new WebPlatform(host({ performance: { now: () => 123 } }), { debug: true }).monotonicNow()).toBe(123);
         expect(platform.onNeedPrivacyAuthorization()).toBe(false);
         await expect(platform.getPrivacySetting()).resolves.toEqual({ supported: false, needAuthorization: false });
         expect(platform.getSystemInfo()).toMatchObject({ os: 'web', windowWidth: 720, pixelRatio: 2 });

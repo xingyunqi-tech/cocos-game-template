@@ -84,7 +84,7 @@ export class SaveSlot<T> {
     set(value: T) {
         this.cache = { generation: this.owner.generation, value };
         const version = this.options.version;
-        this.owner.markDirty(this.key, () => ({ v: version, d: value }));
+        this.owner.markDirty(this.key, version, () => ({ v: version, d: value }));
     }
 
     update(mutate: (draft: T) => void) {
@@ -104,6 +104,9 @@ export class SaveStore {
     private readonly dirty = new Map<string, () => Envelope>();
     private timer: unknown = null;
     private scopeGeneration = 0;
+    private readonly registered = new Set<string>();
+    private readonly newer = new Map<string, boolean>();
+    private readonly blockedWarned = new Set<string>();
 
     constructor(private readonly options: SaveStoreOptions) {}
 
@@ -128,17 +131,26 @@ export class SaveStore {
 
     slot<T>(key: string, options: SlotOptions<T>): SaveSlot<T> {
         if (key.includes(':')) throw new Error(`存档 key 不能包含冒号：${key}`);
+        if (this.registered.has(key)) throw new Error(`存档 key 重复注册：${key}`);
+        this.registered.add(key);
         return new SaveSlot(this, key, options);
     }
 
     read<T>(key: string, options: SlotOptions<T>): T {
         this.checkScope('读取', key);
-        const raw = this.options.store.getItem(this.prefix + key);
+        const fullKey = this.prefix + key;
+        const raw = this.options.store.getItem(fullKey);
         if (raw === null || raw === undefined || raw === '') return options.defaults();
         let data: unknown;
         try {
             const parsed: unknown = JSON.parse(raw);
             if (!isEnvelope(parsed)) throw new Error('存档结构无效');
+            const newer = parsed.v > options.version;
+            this.newer.set(fullKey, newer);
+            if (newer) {
+                this.warn('存档版本高于当前代码，使用默认值且不写入', { key, from: parsed.v, to: options.version });
+                return options.defaults();
+            }
             data = migrate(parsed, options.version, options.migrations);
             if (data === undefined) {
                 this.warn('存档版本无法迁移，使用默认值', { key, from: parsed.v, to: options.version });
@@ -153,9 +165,17 @@ export class SaveStore {
         return data as T;
     }
 
-    markDirty(key: string, serialize: () => Envelope) {
+    markDirty(key: string, version: number, serialize: () => Envelope) {
         this.checkScope('写入', key);
-        this.dirty.set(this.prefix + key, serialize);
+        const fullKey = this.prefix + key;
+        if (this.isNewer(fullKey, version)) {
+            if (!this.blockedWarned.has(fullKey)) {
+                this.blockedWarned.add(fullKey);
+                this.warn('存档版本高于当前代码，不写入', { key, to: version });
+            }
+            return;
+        }
+        this.dirty.set(fullKey, serialize);
         if (this.timer !== null) return;
         const schedule = this.options.schedule ?? ((fn, ms) => setTimeout(fn, ms));
         this.timer = schedule(() => {
@@ -192,6 +212,7 @@ export class SaveStore {
     remove(key: string) {
         const fullKey = this.prefix + key;
         this.dirty.delete(fullKey);
+        this.forgetVersion(fullKey);
         this.options.store.removeItem(fullKey);
         this.removeFromIndex(fullKey);
     }
@@ -200,10 +221,36 @@ export class SaveStore {
         const prefix = this.prefix;
         const inScope = (key: string) => key.startsWith(prefix) && !key.slice(prefix.length).includes(':');
         for (const key of Array.from(this.dirty.keys())) if (inScope(key)) this.dirty.delete(key);
+        for (const key of Array.from(this.newer.keys())) if (inScope(key)) this.forgetVersion(key);
         const index = this.readIndex();
         for (const key of index) if (inScope(key)) this.options.store.removeItem(key);
         this.writeIndex(index.filter((key) => !inScope(key)));
         this.scopeGeneration++;
+    }
+
+    private isNewer(fullKey: string, version: number): boolean {
+        let newer = this.newer.get(fullKey);
+        if (newer === undefined) {
+            newer = (this.storedVersion(fullKey) ?? 0) > version;
+            this.newer.set(fullKey, newer);
+        }
+        return newer;
+    }
+
+    private storedVersion(fullKey: string): number | null {
+        const raw = this.options.store.getItem(fullKey);
+        if (!raw) return null;
+        try {
+            const parsed: unknown = JSON.parse(raw);
+            return isEnvelope(parsed) ? parsed.v : null;
+        } catch {
+            return null;
+        }
+    }
+
+    private forgetVersion(fullKey: string) {
+        this.newer.delete(fullKey);
+        this.blockedWarned.delete(fullKey);
     }
 
     private checkScope(action: string, key: string) {

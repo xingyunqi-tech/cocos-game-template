@@ -5,8 +5,42 @@ import {
     isSidebarLaunch,
     normalizeLaunchOptions,
     parseQueryString,
+    steadyClock,
     toNetworkType,
 } from 'db://game-core/platform/utils';
+
+describe('steadyClock', () => {
+    function ticking(ratio: number) {
+        const c = { wall: 0 };
+        const wall = () => ++c.wall;
+        const read = () => c.wall * ratio + 5000;
+        return { c, clock: steadyClock(read, wall) };
+    }
+
+    it('converts a microsecond timer to milliseconds', () => {
+        const { c, clock } = ticking(1000);
+        const first = clock!();
+        c.wall += 100;
+        expect(clock!() - first).toBe(100);
+    });
+
+    it('keeps a millisecond timer as is', () => {
+        const { c, clock } = ticking(1);
+        const first = clock!();
+        c.wall += 100;
+        expect(clock!() - first).toBe(100);
+    });
+
+    it('returns null when the timer does not advance', () => {
+        let wall = 0;
+        expect(
+            steadyClock(
+                () => 42,
+                () => ++wall,
+            ),
+        ).toBeNull();
+    });
+});
 
 describe('compareVersion', () => {
     it('compares dotted versions numerically', () => {

@@ -18,5 +18,6 @@ describe('scaffold', () => {
     it('rejects invalid names', () => {
         expect(() => moduleFiles('Shop')).toThrow('模块名');
         expect(() => moduleFiles('my_shop')).toThrow('模块名');
+        expect(() => moduleFiles('sidebar')).toThrow('存档 key 冲突');
     });
 });

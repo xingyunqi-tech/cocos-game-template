@@ -64,6 +64,24 @@ export function toNetworkType(value: unknown): NetworkType {
     return (NETWORK_TYPES as readonly string[]).includes(text) ? (text as NetworkType) : 'unknown';
 }
 
+const UNIT_PROBE_MS = 2;
+const UNIT_PROBE_MAX_SPINS = 1e7;
+const MICROSECOND_RATIO = 30;
+
+/** 把平台计时器换算为毫秒：单位因环境而异（毫秒或微秒），创建时对照墙钟约 2ms 判定；计时器不前进时返回 null */
+export function steadyClock(read: () => number, wall: () => number = Date.now): (() => number) | null {
+    const startRead = read();
+    const startWall = wall();
+    let elapsedWall = 0;
+    for (let spins = 0; elapsedWall < UNIT_PROBE_MS && spins < UNIT_PROBE_MAX_SPINS; spins++) {
+        elapsedWall = wall() - startWall;
+    }
+    const elapsedRead = read() - startRead;
+    if (elapsedWall <= 0 || !(elapsedRead > 0)) return null;
+    const scale = elapsedRead / elapsedWall > MICROSECOND_RATIO ? 1000 : 1;
+    return () => read() / scale;
+}
+
 export function errorCodeOf(err: unknown): number | undefined {
     if (typeof err !== 'object' || err === null) return undefined;
     const record = err as { errCode?: unknown; errNo?: unknown };

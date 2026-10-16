@@ -39,6 +39,8 @@ npm run new:module -- shop
 
 - 用户进度用 `userSave.slot`，设备设置用 `deviceSave.slot`；不要调用 `oops.storage.setUser`、`sys.localStorage.clear()`
 - slot 的 `version` 递增时提供 `migrations[newVersion]`，迁移失败回退默认值
+- 本地存档版本高于代码中的 `version`（版本回退、灰度回滚）时读到默认值，本次运行的修改不写入，原存档保留
+- 同一个存档对象中 slot key 只能注册一次，重复注册抛错；game-core 已占用 userSave 的 `sidebar`，deviceSave 的 `device`、`auth`、`settings`、`gm`、`remote-config`
 - 单个 slot 超过 512KB 会告警，平台单 key 上限 1MB、总量 10MB
 
 ## 4. prefab 界面
@@ -99,7 +101,7 @@ bootPipeline.register(
 
 ## 8. 服务器时间
 
-`serverTime.now()`、`serverTime.today()`（默认东八区自然日）以服务器时间为准：登录响应的 `serverTime`（毫秒）与 HTTP 响应头 `Date` 自动校准；未校准时回退本机时间，`serverTime.calibrated` 为 false。校准后按单调时钟推算，修改系统时间不影响；未校准（离线进入或服务端未返回 `serverTime`）时使用本机时间，此时修改系统时间可以影响结果，奖励价值高时可在 `serverTime.calibrated` 为 false 时不发放。按天发放的奖励（如 `sidebarReward`）使用 `serverTime.today()`。Web 跨域请求读取 `Date` 头需要服务端设置 `Access-Control-Expose-Headers: Date`。
+`serverTime.now()`、`serverTime.today()`（默认东八区自然日）以服务器时间为准：登录响应的 `serverTime`（毫秒）与 HTTP 响应头 `Date` 自动校准。单调时钟由平台提供（Web 用 `performance.now`，小游戏用 `wx.getPerformance` / `tt.getPerformance`，启动时自动判定毫秒或微秒），校准后按单调时钟推算，修改系统时间不影响，`serverTime.calibrated` 为 true。未校准（离线进入或服务端未返回 `serverTime`）时使用本机时间；平台不提供单调时钟时按服务器偏移修正本机时间，两种情况 `calibrated` 都为 false，修改系统时间可以影响结果，奖励价值高时可在 `calibrated` 为 false 时不发放。按天发放的奖励（如 `sidebarReward`）使用 `serverTime.today()`。Web 跨域请求读取 `Date` 头需要服务端设置 `Access-Control-Expose-Headers: Date`。
 
 ## 9. 横屏游戏
 

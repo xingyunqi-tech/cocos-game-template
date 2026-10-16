@@ -20,7 +20,7 @@ import type {
     SystemInfo,
     TopInset,
 } from '../types';
-import { errorCodeOf, normalizeLaunchOptions, toNetworkType, type RawLaunchOptions } from '../utils';
+import { errorCodeOf, normalizeLaunchOptions, steadyClock, toNetworkType, type RawLaunchOptions } from '../utils';
 import type {
     ApiError,
     ErrorListener,
@@ -211,6 +211,7 @@ export abstract class MiniGamePlatform implements IPlatform {
     private updateManager: UpdateManager | null | undefined;
     private updateListeners: Record<'ready' | 'failed', Array<() => void>> = { ready: [], failed: [] };
     private shareListener: (() => ShareOptions) | null = null;
+    private steady: (() => number) | null | undefined;
 
     protected constructor(protected readonly api: MiniGameApi) {
         let raw: RawLaunchOptions | undefined;
@@ -347,6 +348,23 @@ export abstract class MiniGamePlatform implements IPlatform {
             const info = this.api.getStorageInfoSync?.();
             if (!info) return null;
             return { currentKB: info.currentSize, limitKB: info.limitSize };
+        } catch {
+            return null;
+        }
+    }
+
+    monotonicNow(): number | null {
+        if (this.steady === undefined) {
+            try {
+                const performance = this.api.getPerformance?.();
+                this.steady =
+                    performance && typeof performance.now === 'function' ? steadyClock(() => performance.now()) : null;
+            } catch {
+                this.steady = null;
+            }
+        }
+        try {
+            return this.steady ? this.steady() : null;
         } catch {
             return null;
         }

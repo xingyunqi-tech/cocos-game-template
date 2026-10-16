@@ -114,6 +114,15 @@ describe('MiniGamePlatform common behavior', () => {
         expect(wechat({ getStorageInfoSync: undefined }).platform.getStorageUsage()).toBeNull();
     });
 
+    it('reads a monotonic clock in milliseconds from getPerformance', () => {
+        const micro = wechat({ getPerformance: () => ({ now: () => Date.now() * 1000 }) }).platform;
+        expect(Math.abs(micro.monotonicNow()! - Date.now())).toBeLessThan(50);
+        const milli = douyin({ getPerformance: () => ({ now: () => Date.now() }) }).platform;
+        expect(Math.abs(milli.monotonicNow()! - Date.now())).toBeLessThan(50);
+        expect(wechat().platform.monotonicNow()).toBeNull();
+        expect(wechat({ getPerformance: () => ({ now: () => 0 }) }).platform.monotonicNow()).toBeNull();
+    });
+
     it('forwards update ready and apply', () => {
         let ready: (() => void) | undefined;
         const manager = { onUpdateReady: (l: () => void) => (ready = l), applyUpdate: vi.fn() };

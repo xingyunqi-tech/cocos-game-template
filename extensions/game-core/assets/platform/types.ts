@@ -136,4 +136,6 @@ export interface IPlatform {
     installErrorHooks(reporter: ErrorReporter): () => void;
     getEnvVersion(): EnvVersion;
     getStorageUsage(): StorageUsage | null;
+    /** 单调时钟读数（毫秒），不受修改系统时间影响；平台不提供时返回 null */
+    monotonicNow(): number | null;
 }

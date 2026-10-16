@@ -31,6 +31,7 @@ export interface WebHost {
     innerWidth?: number;
     innerHeight?: number;
     devicePixelRatio?: number;
+    performance?: { now(): number };
     addEventListener(type: string, listener: (event: unknown) => void, options?: { capture?: boolean }): void;
     removeEventListener(type: string, listener: (event: unknown) => void, options?: { capture?: boolean }): void;
 }
@@ -195,5 +196,10 @@ export class WebPlatform implements IPlatform {
 
     getStorageUsage(): StorageUsage | null {
         return null;
+    }
+
+    monotonicNow(): number | null {
+        const performance = this.host.performance;
+        return performance && typeof performance.now === 'function' ? performance.now() : null;
     }
 }

@@ -55,14 +55,15 @@ const localStore: KeyValueStore = {
 const log = createLogger('game-core');
 const saveWarn = (message: string, detail: Record<string, unknown>) => log.warn(message, detail);
 
+export const platform: IPlatform = createPlatform({ debug: DEBUG });
 export const bootPipeline = new BootPipeline();
 export const lifecycle = new Lifecycle();
 export const xhrTransport = new XhrTransport();
 export const mockTransport = new MockTransport();
 export const http = new HttpClient({ transport: xhrTransport });
-export const serverTime = new ServerTime();
+export const serverTime = new ServerTime({ monotonic: () => platform.monotonicNow() });
 http.useResponse((response) => {
-    if (!serverTime.calibrated && !response.headers.age) serverTime.syncFromDateHeader(response.headers.date);
+    if (!serverTime.synced && !response.headers.age) serverTime.syncFromDateHeader(response.headers.date);
     return response;
 });
 export const payment = new PaymentService((item, result) =>
@@ -111,7 +112,6 @@ export function confirm(options: ConfirmOptions): Promise<boolean> {
 export const STORAGE_WARN_RATIO = 0.8;
 export const LOGIN_STEP_TIMEOUT_MS = 30000;
 
-export const platform: IPlatform = createPlatform({ debug: DEBUG });
 export const network = new NetworkStatus();
 export const appUpdate = new AppUpdate();
 export const ads = new AdService({

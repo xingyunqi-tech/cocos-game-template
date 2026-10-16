@@ -110,6 +110,18 @@ describe('ServerTime', () => {
         expect(new ServerTime({ now: () => at, timezoneOffsetMinutes: 0 }).today()).toBe('2026-10-15');
     });
 
+    it('corrects the local clock by the server offset but stays uncalibrated without a monotonic clock', () => {
+        const c = { wall: 1000 };
+        const time = new ServerTime({ now: () => c.wall, monotonic: () => null });
+        expect(time.synced).toBe(false);
+        time.sync(50000, time.mark());
+        expect(time.synced).toBe(true);
+        expect(time.calibrated).toBe(false);
+        expect(time.now()).toBe(50000);
+        c.wall += 1000;
+        expect(time.now()).toBe(51000);
+    });
+
     it('ignores changes to the local wall clock after calibration', () => {
         const { c, time } = clocks();
         time.sync(Date.UTC(2026, 9, 15, 4, 0));

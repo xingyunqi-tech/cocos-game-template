@@ -100,6 +100,7 @@ export interface MiniGameApi {
     onMemoryWarning?(listener: MemoryListener): void;
     offMemoryWarning?(listener: MemoryListener): void;
     getStorageInfoSync?(): { currentSize: number; limitSize: number };
+    getPerformance?(): { now(): number };
     createRewardedVideoAd?(options: { adUnitId: string }): RewardedVideoAd;
     createInterstitialAd?(options: { adUnitId: string }): InterstitialAd;
 }

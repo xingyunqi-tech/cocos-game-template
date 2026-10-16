@@ -24,6 +24,10 @@ function setup(extra: Partial<ConstructorParameters<typeof SaveStore>[0]> = {}) 
     return { store, save, scheduled };
 }
 
+function reopen(store: MemoryStore, extra: Partial<ConstructorParameters<typeof SaveStore>[0]> = {}) {
+    return new SaveStore({ store, prefix: 'gc:u', ...extra });
+}
+
 const profile = { version: 2, defaults: (): Profile => ({ level: 1, coins: 0, name: '' }) };
 
 describe('migrate', () => {
@@ -53,7 +57,7 @@ describe('SaveStore', () => {
         expect(store.getItem('gc:u:profile')).toBeNull();
         scheduled.shift()?.();
         expect(JSON.parse(store.getItem('gc:u:profile')!)).toEqual({ v: 2, d: { level: 5, coins: 0, name: '' } });
-        expect(save.slot('profile', profile).get().level).toBe(5);
+        expect(reopen(store).slot('profile', profile).get().level).toBe(5);
     });
 
     it('flush writes pending data immediately', () => {
@@ -65,10 +69,11 @@ describe('SaveStore', () => {
 
     it('isolates scopes per user', () => {
         const { save, store } = setup();
+        const slot = save.slot('profile', profile);
         save.setScope('u1');
-        save.slot('profile', profile).update((p) => (p.name = 'a'));
+        slot.update((p) => (p.name = 'a'));
         save.setScope('u2');
-        expect(save.slot('profile', profile).get().name).toBe('');
+        expect(slot.get().name).toBe('');
         expect((JSON.parse(store.getItem('gc:u:u1:profile')!) as { d: Profile }).d.name).toBe('a');
     });
 
@@ -131,12 +136,13 @@ describe('SaveStore edge cases', () => {
     });
 
     it('round-trips arrays and primitives without merging defaults', () => {
-        const { save } = setup();
+        const { save, store } = setup();
         save.slot<string[]>('inv', { version: 1, defaults: () => [] }).set(['sword']);
         save.slot<number>('best', { version: 1, defaults: () => 0 }).set(42);
         save.flush();
-        expect(save.slot<string[]>('inv', { version: 1, defaults: () => [] }).get()).toEqual(['sword']);
-        expect(save.slot<number>('best', { version: 1, defaults: () => 0 }).get()).toBe(42);
+        const reopened = reopen(store);
+        expect(reopened.slot<string[]>('inv', { version: 1, defaults: () => [] }).get()).toEqual(['sword']);
+        expect(reopened.slot<number>('best', { version: 1, defaults: () => 0 }).get()).toBe(42);
     });
 
     it('treats empty strings from mini-game storage as missing without warning', () => {
@@ -202,6 +208,53 @@ describe('SaveStore edge cases', () => {
         const { save } = setup({ onWarn, requireScope: true });
         save.slot('profile', profile).get();
         expect(onWarn).toHaveBeenCalledWith('未设置存档作用域时读取', { key: 'profile' });
+    });
+
+    it('throws when a key is registered twice', () => {
+        const { save } = setup();
+        save.slot('profile', profile);
+        expect(() => save.slot('profile', profile)).toThrow('存档 key 重复注册：profile');
+    });
+
+    it('reads defaults for data newer than the slot version and never writes over it', () => {
+        const onWarn = vi.fn();
+        const { save, store } = setup({ onWarn });
+        const newer = JSON.stringify({ v: 3, d: { level: 9, coins: 999, name: 'x' } });
+        store.setItem('gc:u:profile', newer);
+        const slot = save.slot('profile', profile);
+        expect(slot.get()).toEqual(profile.defaults());
+        slot.update((p) => (p.coins = 1));
+        slot.update((p) => (p.coins = 2));
+        save.flush();
+        expect(slot.get().coins).toBe(2);
+        expect(store.getItem('gc:u:profile')).toBe(newer);
+        expect(onWarn).toHaveBeenCalledWith('存档版本高于当前代码，使用默认值且不写入', {
+            key: 'profile',
+            from: 3,
+            to: 2,
+        });
+        expect(onWarn).toHaveBeenCalledWith('存档版本高于当前代码，不写入', { key: 'profile', to: 2 });
+        expect(onWarn).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not write over newer data when setting without reading first', () => {
+        const { save, store } = setup();
+        const newer = JSON.stringify({ v: 3, d: { level: 9 } });
+        store.setItem('gc:u:profile', newer);
+        save.slot('profile', profile).set(profile.defaults());
+        save.flush();
+        expect(store.getItem('gc:u:profile')).toBe(newer);
+    });
+
+    it('writes again after newer data is reset', () => {
+        const { save, store } = setup();
+        store.setItem('gc:u:profile', JSON.stringify({ v: 3, d: {} }));
+        const slot = save.slot('profile', profile);
+        slot.get();
+        slot.reset();
+        slot.set(profile.defaults());
+        save.flush();
+        expect((JSON.parse(store.getItem('gc:u:profile')!) as { v: number }).v).toBe(2);
     });
 
     it('measures size in UTF-8 bytes', () => {
