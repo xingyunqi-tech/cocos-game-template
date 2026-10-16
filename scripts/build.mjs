@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { loadLocalEnv, PLATFORMS, ROOT, runBuild } from './lib/cocos.mjs';
+import { checkPlatformSize } from './size-check.mjs';
 
 const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -30,6 +31,19 @@ for (const platform of platforms) {
         continue;
     }
     if (result.ok) {
+        let size;
+        try {
+            size = checkPlatformSize(platform, result.outputDir);
+        } catch (err) {
+            size = { ok: false, lines: [`包体检查出错：${err.message}`] };
+        }
+        for (const line of size.lines) console.log(`  ${line}`);
+        if (!size.ok && values.debug) console.warn(`! ${platform} 调试包超出包体上限，发布构建会失败`);
+        else if (!size.ok) {
+            failed = true;
+            console.error(`✗ ${platform} 包体超限`);
+            continue;
+        }
         console.log(`✓ ${platform} → ${result.outputDir}`);
         continue;
     }

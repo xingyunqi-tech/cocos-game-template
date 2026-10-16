@@ -320,6 +320,30 @@ function registerAuthMock() {
     });
 }
 
+export type GameEntry = () => void | Promise<void>;
+let gameEntry: GameEntry | null = null;
+
+/** 注册业务入口，启动流水线完成后调用一次 */
+export function setGameEntry(entry: GameEntry) {
+    gameEntry = entry;
+}
+
+export async function runGameEntry(): Promise<boolean> {
+    const entry = gameEntry;
+    gameEntry = null;
+    if (!entry) {
+        log.info('未注册游戏入口');
+        return false;
+    }
+    try {
+        await entry();
+        return true;
+    } catch (err) {
+        reportError(err, 'boot', { step: 'game-entry' });
+        return false;
+    }
+}
+
 let initialized = false;
 
 export function initGameCore() {

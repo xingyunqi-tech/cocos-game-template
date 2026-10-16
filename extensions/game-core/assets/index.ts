@@ -1,4 +1,4 @@
-export const GAME_CORE_VERSION = '0.4.0';
+export const GAME_CORE_VERSION = '0.5.0';
 
 export { GameRoot, CONFIG_LOAD_ATTEMPTS, CONFIG_PATH } from './boot/GameRoot';
 export { BootPipeline, BootStepError } from './boot/BootPipeline';
@@ -23,6 +23,7 @@ export {
     onSidebarLaunch,
     privacy,
     settings,
+    setGameEntry,
     sidebarReward,
     deviceSave,
     getDeviceId,
@@ -39,7 +40,7 @@ export {
     STORAGE_WARN_RATIO,
     userSave,
 } from './core';
-export type { ConfirmProvider, CoreRemoteSettings, PrivacyPromptText } from './core';
+export type { ConfirmProvider, CoreRemoteSettings, GameEntry, PrivacyPromptText } from './core';
 export { createLogger, logHub } from './monitor/logger';
 export type { LogLevel, LogRecord, LogSink, Logger } from './monitor/logger';
 export { track, tracker } from './monitor/track';
@@ -121,7 +122,19 @@ export { LEGAL_DOCUMENTS } from './ui/DocumentPage';
 export type { LegalDocument } from './ui/DocumentPage';
 export { toDesignInset } from './ui/inset';
 export type { DesignInset } from './ui/inset';
-export { addButton, addLabel, addPanel, createNode, destroyNow, fillRect, getLayer, openModal, THEME } from './ui/kit';
+export {
+    addButton,
+    addLabel,
+    addPanel,
+    createNode,
+    destroyNow,
+    fillRect,
+    getLayer,
+    openModal,
+    setButtonText,
+    THEME,
+    visibleSize,
+} from './ui/kit';
 export type { ButtonOptions, LabelOptions, LayerName, Modal } from './ui/kit';
 export { SafeTopAdapter } from './ui/SafeTopAdapter';
 export { Settings } from './ui/Settings';

@@ -48,6 +48,13 @@ describe('resolveBuildConfig', () => {
         );
     });
 
+    it('injects the remote server address when set', () => {
+        expect(resolveBuildConfig('douyin', { REMOTE_SERVER: 'https://cdn.example.com/game/' }).config.server).toBe(
+            'https://cdn.example.com/game/',
+        );
+        expect(resolveBuildConfig('douyin', {}).config.server).toBeUndefined();
+    });
+
     it('rejects unknown platforms', () => {
         expect(() => resolveBuildConfig('alipay', {})).toThrow('未知平台');
     });

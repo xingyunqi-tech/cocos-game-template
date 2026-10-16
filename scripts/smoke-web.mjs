@@ -12,6 +12,7 @@ const { values } = parseArgs({
         chrome: { type: 'string', default: process.env.CHROME_PATH },
         screenshot: { type: 'string' },
         timeout: { type: 'string', default: '30000' },
+        'skip-demo': { type: 'boolean', default: false },
     },
 });
 
@@ -286,6 +287,68 @@ try {
     checks.push('断网横幅出现与消失');
     if (ui.sidebarEntry !== null || ui.sidebarReward) throw new Error(`Web 不应有侧边栏入口：${JSON.stringify(ui)}`);
     checks.push('Web 不创建侧边栏入口');
+
+    if (values['skip-demo']) {
+        const hasDemo = await page.evaluate(() =>
+            Boolean(window.cc.director.getScene().getChildByPath('root/gui/LayerUI/DemoMenu')),
+        );
+        if (hasDemo) throw new Error('--skip-demo 时不应出现示例游戏');
+        if (!consoleLines.some((line) => line.includes('未注册游戏入口'))) throw new Error('未执行游戏入口检查');
+        checks.push('未注册游戏入口时启动正常');
+    } else {
+        await page.waitForFunction(
+            () => Boolean(window.cc.director.getScene().getChildByPath('root/gui/LayerUI/DemoMenu')),
+            null,
+            { timeout: 10000 },
+        );
+        checks.push('示例游戏首页已显示');
+        const demo = await page.evaluate(async () => {
+            const scene = window.cc.director.getScene();
+            const find = (path) => scene.getChildByPath(`root/gui/LayerUI/${path}`);
+            const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            const until = async (check, ms = 10000) => {
+                const deadline = Date.now() + ms;
+                while (!check()) {
+                    if (Date.now() > deadline) throw new Error('等待超时');
+                    await wait(50);
+                }
+            };
+            const coins = () => {
+                const label = find('DemoMenu/Coins')?.components.find((c) => typeof c.string === 'string');
+                return label?.string;
+            };
+            const before = coins();
+            find('DemoMenu/Button_开始游戏').emit('touch-end');
+            await until(() => find('DemoPlay/Field')?.children.length > 0);
+            const field = find('DemoPlay/Field');
+            const hits = field.children.length;
+            field.children.slice().forEach((target) => target.emit('touch-start'));
+            field.components.find((c) => 'duration' in c).remaining = 0.01;
+            await until(() => Boolean(find('DemoResult')));
+            const score = Number(
+                /\d+/.exec(
+                    find('DemoResult')
+                        .children.map((n) => n.components.find((c) => typeof c.string === 'string')?.string ?? '')
+                        .find((t) => t.startsWith('得分')),
+                )[0],
+            );
+            find('DemoResult/Button_看广告 金币翻倍').emit('touch-end');
+            await until(() => !find('DemoResult/Button_看广告 金币翻倍')?.parent);
+            window.gameCore.userSave.flush();
+            const saved = Object.entries(localStorage).find(([key]) => key.endsWith(':demo'));
+            find('DemoResult/Button_返回首页').emit('touch-end');
+            await until(() => Boolean(find('DemoMenu')));
+            return { before, after: coins(), hits, score, saved: saved && JSON.parse(saved[1]) };
+        });
+        if (demo.score !== demo.hits || demo.hits === 0) throw new Error(`得分与点击数不符：${JSON.stringify(demo)}`);
+        checks.push(`示例游戏完成一局，得分 ${demo.score}`);
+        const expected = demo.score * 2;
+        if (demo.saved?.d?.coins !== expected || demo.saved.d.plays !== 1 || demo.saved.d.best !== demo.score) {
+            throw new Error(`存档不符：${JSON.stringify(demo)}`);
+        }
+        if (demo.after !== `金币 ${expected}`) throw new Error(`首页金币未刷新：${JSON.stringify(demo)}`);
+        checks.push('激励视频翻倍金币并写入用户存档，返回首页后显示');
+    }
 
     if (values.screenshot) await page.screenshot({ path: values.screenshot });
 } catch (err) {

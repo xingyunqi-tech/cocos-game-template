@@ -1,5 +1,23 @@
 # game-core 变更记录
 
+## 0.5.0（未发布）
+
+- `setGameEntry(entry)`：业务入口，启动流水线完成并关闭加载页后调用，只执行一次；未注册时只打日志，删除 `assets/game/` 后项目仍可运行
+- 导出 `visibleSize`、`setButtonText`
+
+### 项目侧资源
+
+- `assets/game/`：示例游戏「点点乐」，覆盖启动、登录、玩法、结算、分享、激励视频、插屏、存档、侧边栏复访奖励
+
+### 构建
+
+- `npm run build` 小游戏构建后按 `scripts/size-limits.json` 检查主包、分包、总包，超限失败；`npm run size` 单独检查
+- `npm run upload:wechat`（miniprogram-ci）、`upload:douyin`（tt-ide-cli），上传前检查版本号、AppID、密钥与 remote 上传命令
+- 构建注入 `REMOTE_SERVER` 远程资源服务器地址
+- `build-configs/wechat.json`、`douyin.json`：开启 `md5Cache`（资源文件名带内容哈希）
+- 上传排除 `remote/`；抖音 token 写入临时 `TMA_CLI_HOME`，上传后删除；上传前拒绝调试包、超限包与缺少远程服务器地址的 remote 构建
+- 上传与远程资源流程未在正式账号执行，待正式 AppID、上传密钥与 CDN 就绪后验证
+
 ## 0.4.0（未发布）
 
 - 通用 UI（代码构建节点，样式见 `THEME`，构建函数 `addButton`、`addLabel`、`addPanel`、`openModal` 等可复用）：`coreUi.confirm` 确认框（高度随正文，可带链接按钮）、`coreUi.setConfirm` 替换模板内全部确认框、`coreUi.openSettings` 设置面板（音乐、音效、震动，隐私政策与用户协议入口）、`coreUi.openDocument` 协议页（按行渲染、可滚动，文本取自 `resources/legal`）、断网横幅、版本更新确认弹窗、`coreUi.createSidebarEntry` 抖音侧边栏入口；设置面板与协议页重复打开时不叠加

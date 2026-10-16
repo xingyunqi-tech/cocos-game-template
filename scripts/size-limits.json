@@ -1,0 +1,4 @@
+{
+  "wechat": { "main": 4194304, "subpackage": null, "independent": 4194304, "total": 31457280 },
+  "douyin": { "main": 4194304, "subpackage": 20971520, "independent": 4194304, "total": 20971520 }
+}

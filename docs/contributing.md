@@ -12,6 +12,8 @@ npm run verify
 npm run build -- web --debug && npm run smoke:web
 ```
 
+改动 game-core 启动流程时，另外在删除 `assets/game/` 的副本上执行 `npm run smoke:web -- --skip-demo`。
+
 改动涉及构建配置、资源或场景时，再执行 `npm run build` 确认三端构建通过。
 
 ## 评审

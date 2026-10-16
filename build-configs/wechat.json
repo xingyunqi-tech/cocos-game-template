@@ -1,0 +1,9 @@
+{
+  "platform": "wechatgame",
+  "md5Cache": true,
+  "packages": {
+    "wechatgame": {
+      "orientation": "portrait"
+    }
+  }
+}

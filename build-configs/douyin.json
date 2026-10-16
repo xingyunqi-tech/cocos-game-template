@@ -1,0 +1,9 @@
+{
+  "platform": "bytedance-mini-game",
+  "md5Cache": true,
+  "packages": {
+    "bytedance-mini-game": {
+      "orientation": "portrait"
+    }
+  }
+}

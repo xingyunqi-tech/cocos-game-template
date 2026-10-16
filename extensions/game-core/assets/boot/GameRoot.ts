@@ -1,7 +1,7 @@
 import { _decorator, Color, JsonAsset, Label, Node, resources, UITransform } from 'cc';
 import { Root } from 'db://oops-framework/core/Root';
 import { GuiPromptConfig } from 'db://oops-framework/core/gui/GuiPromptConfig';
-import { bootPipeline, coreOptions, getDesignInset, healthNotice, initGameCore } from '../core';
+import { bootPipeline, coreOptions, getDesignInset, healthNotice, initGameCore, runGameEntry } from '../core';
 import { reportError } from '../monitor/errors';
 import { createLogger } from '../monitor/logger';
 import { track } from '../monitor/track';
@@ -98,6 +98,7 @@ export class GameRoot extends Root {
         const elapsed = Date.now() - started;
         await healthNotice.hide(coreOptions.healthNoticeMinMs);
         track('boot_done', { ms: elapsed });
+        await runGameEntry();
     }
 
     private hideFallback() {

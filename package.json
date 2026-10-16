@@ -20,6 +20,12 @@
     "test": "vitest run",
     "check:plugins": "node scripts/check-plugins.mjs",
     "build": "node scripts/build.mjs",
+    "build:web": "node scripts/build.mjs web",
+    "build:wechat": "node scripts/build.mjs wechat",
+    "build:douyin": "node scripts/build.mjs douyin",
+    "size": "node scripts/size-check.mjs",
+    "upload:wechat": "node scripts/upload.mjs wechat",
+    "upload:douyin": "node scripts/upload.mjs douyin",
     "smoke:web": "node scripts/smoke-web.mjs",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run check:plugins"
   },
@@ -29,8 +35,10 @@
     "@types/node": "26.6.5",
     "eslint": "10.12.0",
     "globals": "^17.13.0",
+    "miniprogram-ci": "2.1.31",
     "playwright-core": "1.64.1",
     "prettier": "3.9.10",
+    "tt-ide-cli": "0.1.33",
     "typescript": "6.0.3",
     "typescript-eslint": "8.71.2",
     "vitest": "5.0.4"

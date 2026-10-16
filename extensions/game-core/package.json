@@ -1,7 +1,7 @@
 {
   "package_version": 2,
   "name": "game-core",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "cocos-game-template 模板核心：启动、平台适配、网络、存档、合规、监控",
   "author": "cocos-game-template",
   "editor": ">=3.8.8",

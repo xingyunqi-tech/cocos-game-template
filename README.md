@@ -29,13 +29,47 @@ npm run smoke:web           # 无头 Chrome 启动 Web 包并检查初始化、�
 
 ## 常用命令
 
-| 命令                                                                         | 作用                                                                                                    |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `npm run build [-- web wechat douyin] [--debug] [--allow-placeholder-appid]` | 命令行构建，默认三端；退出码 36 且日志中没有匹配 `/ - error: /` 的行才算成功，日志在 `temp/build-logs/` |
-| `npm run smoke:web`                                                          | 运行 `build/web-mobile`（需 `--debug` 构建）                                                            |
-| `npm run verify`                                                             | 格式、lint、类型检查、单测、插件校验                                                                    |
-| `npm run check:plugins`                                                      | 校验 `extensions/oops-plugin-framework` 与锁定快照一致                                                  |
-| `npm run gen:cc-env`                                                         | 由本机引擎 `cc.config.json` 生成 `types/cc-env.d.ts` 与测试 stub                                        |
+| 命令                                                                         | 作用                                                                                                                              |
+| ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run build [-- web wechat douyin] [--debug] [--allow-placeholder-appid]` | 命令行构建，默认三端；退出码 36 且日志中没有匹配 `/ - error: /` 的行才算成功，日志在 `temp/build-logs/`；小游戏构建后自动检查包体 |
+| `npm run build:web` / `build:wechat` / `build:douyin`                        | 单端构建                                                                                                                          |
+| `npm run size [-- wechat douyin]`                                            | 检查已有构建产物的包体，上限在 `scripts/size-limits.json`                                                                         |
+| `npm run upload:wechat -- --version 1.0.0 --desc 说明`                       | 上传微信体验版（`--robot` 指定机器人编号，`--dry-run` 只做检查）                                                                  |
+| `npm run upload:douyin -- --version 1.0.0 --desc 说明`                       | 上传抖音测试版                                                                                                                    |
+| `npm run smoke:web [-- --skip-demo]`                                         | 运行 `build/web-mobile`（需 `--debug` 构建）；`--skip-demo` 用于删除示例游戏后                                                    |
+| `npm run verify`                                                             | 格式、lint、类型检查、单测、插件校验                                                                                              |
+| `npm run check:plugins`                                                      | 校验 `extensions/oops-plugin-framework` 与锁定快照一致                                                                            |
+| `npm run gen:cc-env`                                                         | 由本机引擎 `cc.config.json` 生成 `types/cc-env.d.ts` 与测试 stub                                                                  |
+
+### 上传与远程资源
+
+上传所需的变量写在 `.env.local`（见 `.env.example`）：
+
+| 变量                    | 说明                                                                                                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `WECHAT_UPLOAD_KEY`     | 微信小游戏后台「开发管理 → 小程序代码上传」下载的密钥文件路径，文件放在仓库目录外（仓库已忽略 `*.key`），需同时配置上传 IP 白名单                                  |
+| `DOUYIN_UPLOAD_TOKEN`   | 抖音开发者后台生成的上传 token；上传时写入临时目录，结束后删除                                                                                                     |
+| `REMOTE_SERVER`         | 远程资源服务器地址，构建时注入                                                                                                                                     |
+| `REMOTE_UPLOAD_COMMAND` | 构建产物含 `remote/` 时执行的上传命令，`{dir}` 替换为带引号的 remote 目录，例如 `ossutil cp -r {dir} oss://bucket/game/`；凭证放在上传工具自己的配置里，不写进命令 |
+
+上传前会检查：版本号格式、AppID 与构建产物一致且不是占位值、密钥存在、不是调试包、包体不超限、含 `remote/` 时已配置远程服务器地址与上传命令。`remote/` 不随代码包上传。先用 `--dry-run` 确认检查通过。
+
+上传与远程资源流程尚未在正式账号上执行过，待正式 AppID、上传密钥与 CDN 就绪后验证。发布前按 [发布清单](docs/release-checklist.md) 逐项确认。
+
+## 示例游戏与业务入口
+
+`assets/game/` 是示例游戏「点点乐」：首页（金币、设置、抖音侧边栏入口）→ 20 秒限时点击 → 结算（激励视频金币翻倍、分享成绩、插屏后返回首页），最高分与金币存在用户存档。
+
+业务入口在模块顶层注册，启动流水线完成后调用：
+
+```ts
+import { setGameEntry } from 'db://game-core';
+setGameEntry(() => openMainScreen());
+```
+
+开始自己的游戏时删除 `assets/game/` 整个目录即可，项目仍可构建运行（`npm run smoke:web -- --skip-demo` 验证）。
+
+示例为了不依赖编辑器资源，界面用 `db://game-core` 的构建函数代码绘制；正式项目的界面用 prefab + `oops.gui.open`。可照抄的是流程：入口注册、存档 slot、广告结果分支（只有 `completed` 发奖）、分享在点击回调中同步调用、侧边栏奖励用 `claim()` 判重、等待广告期间锁住本页按钮。修改示例文案或节点名会影响 `npm run smoke:web` 的示例检查。
 
 ## 目录
 
@@ -45,11 +79,11 @@ extensions/game-core/               模板核心插件，以 db://game-core 引�
 assets/scenes/main.scene            启动场景，根节点挂 GameRoot
 assets/resources/config.json        环境配置（type: dev / test / prod）
 assets/resources/common/            提示 prefab（notify、wait、mask）
-assets/game/                        业务代码
+assets/game/                        业务代码（示例游戏，可整体删除）
 build-configs/                      各平台构建参数（Cocos CLI configPath）
 scripts/                            构建、冒烟、插件校验脚本
 types/                              无编辑器环境的类型声明
-docs/                               开发计划、验证报告、贡献流程
+docs/                               开发计划、验证报告、贡献流程、发布清单
 ```
 
 业务代码约束（ESLint 检查）：不直接访问 `wx`、`tt`、`window`、`globalThis`；只通过 `db://game-core` 公开入口使用模板能力，不引用 `db://game-core/**/impl/**`。
@@ -187,3 +221,4 @@ export {};
 - [开发计划](docs/development-plan.md)
 - [S0 技术验证报告](docs/spike-report.md)
 - [贡献流程](docs/contributing.md)
+- [发布清单](docs/release-checklist.md)

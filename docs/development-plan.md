@@ -373,7 +373,7 @@ interface ISidebar {                 // 抖音必接
 |---|---|---|---|
 | 构建脚本 | `build-configs/*`、`scripts/build` | 三端命令可用，退出码判定正确 | M1b |
 | 包体检查 | `scripts/size-check`、`size-limits.json` | 人为超限时构建失败 | 构建脚本 |
-| 构建优化默认值 | 构建配置 | 主包大小优于 S0 基线 | 构建脚本 |
+| 构建优化默认值 | 构建配置 | 主包大小优于 S0 基线（批次 6 未达成：加入 game-core 与示例后微信主包 2,532,085 字节，比 S0 空模板多约 36KB；项目脚本已压缩，oops 插件内 pako 46KB 不可改；分离引擎待正式 AppID） | 构建脚本 |
 | 远程 Bundle 与上传 | `scripts/upload` | 体验版可加载 CDN 资源 | 前置 #7 |
 | 示例游戏 | `assets/game/*` | 覆盖验收第 4 条全部链路 | M1b |
 | 发布清单 | `docs/release-checklist.md` | 覆盖 §5 所列项 | — |

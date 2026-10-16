@@ -84,6 +84,8 @@ export function resolveBuildConfig(platform, env = process.env) {
     if (!target) throw new Error(`未知平台：${platform}，可选 ${Object.keys(PLATFORMS).join(' / ')}`);
     const file = join(ROOT, 'build-configs', `${platform}.json`);
     const config = isFile(file) ? JSON.parse(readFileSync(file, 'utf8')) : { platform: target };
+    const server = env.REMOTE_SERVER?.trim();
+    if (server) config.server = server;
     const appid = APPIDS[platform];
     if (!appid) return { config, placeholder: false };
     const value = env[appid.env]?.trim();
