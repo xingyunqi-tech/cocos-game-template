@@ -1,7 +1,7 @@
 import { _decorator, Color, JsonAsset, Label, Node, resources, UITransform } from 'cc';
 import { Root } from 'db://oops-framework/core/Root';
 import { GuiPromptConfig } from 'db://oops-framework/core/gui/GuiPromptConfig';
-import { bootPipeline, initGameCore } from '../core';
+import { bootPipeline, coreOptions, getDesignInset, healthNotice, initGameCore } from '../core';
 import { reportError } from '../monitor/errors';
 import { createLogger } from '../monitor/logger';
 import { track } from '../monitor/track';
@@ -70,9 +70,15 @@ export class GameRoot extends Root {
 
     private async pipelineStage() {
         const started = Date.now();
+        if (coreOptions.healthNotice) {
+            healthNotice.show({ ageRating: coreOptions.ageRating, safeTop: () => getDesignInset().safeTop });
+        }
         try {
             await bootPipeline.run({
-                onProgress: (ratio, step) => log.debug('启动进度', step, Math.round(ratio * 100)),
+                onProgress: (ratio, step) => {
+                    healthNotice.setProgress(ratio);
+                    log.debug('启动进度', step, Math.round(ratio * 100));
+                },
                 onStepDone: (result) => {
                     log.info(`步骤 ${result.name} ${result.ok ? '完成' : '失败'} ${result.durationMs}ms`);
                     track('boot_step', { step: result.name, ok: result.ok, ms: result.durationMs });
@@ -82,13 +88,16 @@ export class GameRoot extends Root {
         } catch (err) {
             if (!(err instanceof BootStepError)) reportError(err, 'boot');
             this.busy = false;
+            healthNotice.setText('');
             this.showFallback(BOOT_FAILED_TEXT);
             return;
         }
         this.stage = 'done';
         this.busy = false;
         this.hideFallback();
-        track('boot_done', { ms: Date.now() - started });
+        const elapsed = Date.now() - started;
+        await healthNotice.hide(coreOptions.healthNoticeMinMs);
+        track('boot_done', { ms: elapsed });
     }
 
     private hideFallback() {

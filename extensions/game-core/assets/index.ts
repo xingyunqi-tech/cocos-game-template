@@ -1,4 +1,4 @@
-export const GAME_CORE_VERSION = '0.3.0';
+export const GAME_CORE_VERSION = '0.4.0';
 
 export { GameRoot, CONFIG_LOAD_ATTEMPTS, CONFIG_PATH } from './boot/GameRoot';
 export { BootPipeline, BootStepError } from './boot/BootPipeline';
@@ -13,6 +13,17 @@ export {
     auth,
     bootPipeline,
     checkStorageUsage,
+    confirm,
+    createPrivacyPrompt,
+    coreOptions,
+    coreUi,
+    defaultPrivacyPrompt,
+    getDesignInset,
+    healthNotice,
+    onSidebarLaunch,
+    privacy,
+    settings,
+    sidebarReward,
     deviceSave,
     getDeviceId,
     http,
@@ -28,7 +39,7 @@ export {
     STORAGE_WARN_RATIO,
     userSave,
 } from './core';
-export type { CoreRemoteSettings } from './core';
+export type { ConfirmProvider, CoreRemoteSettings, PrivacyPromptText } from './core';
 export { createLogger, logHub } from './monitor/logger';
 export type { LogLevel, LogRecord, LogSink, Logger } from './monitor/logger';
 export { track, tracker } from './monitor/track';
@@ -99,3 +110,18 @@ export type {
     SystemInfo,
     TopInset,
 } from './platform/types';
+export { HEALTH_NOTICE, platformManagedAntiAddiction } from './compliance/health';
+export type { AntiAddictionStatus, IAntiAddiction } from './compliance/health';
+export { HealthNotice } from './compliance/HealthNotice';
+export { PrivacyFlow } from './compliance/PrivacyFlow';
+export type { PrivacyPrompt } from './compliance/PrivacyFlow';
+export { SidebarReward } from './compliance/SidebarReward';
+export type { ConfirmOptions } from './ui/ConfirmDialog';
+export { LEGAL_DOCUMENTS } from './ui/DocumentPage';
+export type { LegalDocument } from './ui/DocumentPage';
+export { toDesignInset } from './ui/inset';
+export type { DesignInset } from './ui/inset';
+export { addButton, addLabel, addPanel, createNode, destroyNow, fillRect, getLayer, openModal, THEME } from './ui/kit';
+export type { ButtonOptions, LabelOptions, LayerName, Modal } from './ui/kit';
+export { SafeTopAdapter } from './ui/SafeTopAdapter';
+export { Settings } from './ui/Settings';

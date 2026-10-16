@@ -131,6 +131,10 @@ try {
     await page.waitForFunction(() => Boolean(window.gameCore), null, { timeout: 5000 });
     const stepNames = await page.evaluate(() => window.gameCore.bootPipeline.stepNames);
     checks.push(`启动流水线步骤：${stepNames.join(' → ')}`);
+    const bootDeadline = Date.now() + 10000;
+    while (!consoleLines.some((line) => line.includes('boot_done')) && Date.now() < bootDeadline) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+    }
     if (!consoleLines.some((line) => line.includes('boot_done'))) throw new Error('启动流水线未完成（未见 boot_done）');
     checks.push('启动流水线完成');
 
@@ -209,6 +213,79 @@ try {
     });
     if (offline.join() !== 'false,true') throw new Error(`断网事件未上报：${JSON.stringify(offline)}`);
     checks.push('断网与恢复事件均触发');
+
+    const ui = await page.evaluate(async () => {
+        const { coreUi, settings, defaultPrivacyPrompt, getDesignInset, sidebarReward, healthNotice } = window.gameCore;
+        const scene = window.cc.director.getScene();
+        const find = (path) => scene.getChildByPath(`root/gui/${path}`);
+        const tap = (node) => {
+            const size = node.getComponent('cc.UITransform')?.contentSize;
+            if (!size || size.width <= 0 || size.height <= 0) throw new Error(`按钮尺寸为 0：${node.name}`);
+            node.emit('touch-end');
+        };
+        const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        const result = { healthHidden: !healthNotice.visible, inset: getDesignInset().top };
+
+        coreUi.openSettings();
+        const vibrationBefore = settings.vibration;
+        tap(find('LayerDialog/SettingsPanel/Panel/Toggle_vibration'));
+        result.vibrationToggled = settings.vibration === !vibrationBefore;
+        settings.vibration = vibrationBefore;
+        tap(find('LayerDialog/SettingsPanel/Panel/Button_关闭'));
+        await wait(50);
+        result.settingsClosed = !find('LayerDialog/SettingsPanel');
+
+        await coreUi.openDocument('privacy');
+        const doc = find('LayerSystem/Document_privacy');
+        const text = doc
+            ?.getChildByPath('Viewport/Content/Label')
+            ?.components.find((c) => typeof c.string === 'string');
+        result.privacyText = text?.string.slice(0, 6);
+        result.privacyLines = doc?.getChildByPath('Viewport/Content')?.children.length ?? 0;
+        tap(doc.getChildByName('Button_返回'));
+        await wait(50);
+        result.documentClosed = !find('LayerSystem/Document_privacy');
+
+        const decide = async (button) => {
+            const pending = defaultPrivacyPrompt({ openContract: () => undefined });
+            await wait(0);
+            const dialogs = find('LayerSystem').children.filter((n) => n.name === 'ConfirmDialog');
+            tap(dialogs[dialogs.length - 1].getChildByPath(`Panel/${button}`));
+            const agree = await pending;
+            await wait(50);
+            return agree;
+        };
+        result.privacyAgree = await decide('Button_同意');
+        result.privacyDisagree = await decide('Button_拒绝');
+        result.dialogClosed = !find('LayerSystem/ConfirmDialog');
+
+        window.dispatchEvent(new Event('offline'));
+        result.bannerShown = Boolean(find('LayerNotify/OfflineBanner'));
+        window.dispatchEvent(new Event('online'));
+        await wait(50);
+        result.bannerHidden = !find('LayerNotify/OfflineBanner');
+
+        result.sidebarEntry = await coreUi.createSidebarEntry(find('LayerUI'));
+        result.sidebarReward = sidebarReward.canClaim();
+        return result;
+    });
+    if (!ui.healthHidden) throw new Error('启动完成后健康忠告加载页未关闭');
+    checks.push('健康忠告加载页在启动完成后关闭');
+    if (ui.inset !== 20) throw new Error(`Web 顶部避让应为默认 20，实际 ${ui.inset}`);
+    checks.push('Web 顶部避让使用默认内边距');
+    if (!ui.vibrationToggled || !ui.settingsClosed) throw new Error(`设置面板异常：${JSON.stringify(ui)}`);
+    checks.push('设置面板切换震动并关闭');
+    if (ui.privacyText !== '【模板占位】' || ui.privacyLines < 10 || !ui.documentClosed)
+        throw new Error(`协议页异常：${JSON.stringify(ui)}`);
+    checks.push('隐私政策页加载文本并可返回');
+    if (ui.privacyAgree !== true || ui.privacyDisagree !== false || !ui.dialogClosed) {
+        throw new Error(`隐私弹窗结果不符：${JSON.stringify(ui)}`);
+    }
+    checks.push('隐私弹窗同意、拒绝两条路径均返回并关闭');
+    if (!ui.bannerShown || !ui.bannerHidden) throw new Error(`断网横幅异常：${JSON.stringify(ui)}`);
+    checks.push('断网横幅出现与消失');
+    if (ui.sidebarEntry !== null || ui.sidebarReward) throw new Error(`Web 不应有侧边栏入口：${JSON.stringify(ui)}`);
+    checks.push('Web 不创建侧边栏入口');
 
     if (values.screenshot) await page.screenshot({ path: values.screenshot });
 } catch (err) {

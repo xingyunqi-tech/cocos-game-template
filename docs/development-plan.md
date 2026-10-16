@@ -124,7 +124,8 @@ cocos-game-template/
 | `config.json` | 项目 `assets/resources/` | `Root` 用 `resources.load` 加载 |
 | 提示 prefab（notify、wait、mask） | 项目 `assets/resources/` | oops 从默认 bundle 加载，`GuiPromptConfig` 不支持指定 bundle |
 | Root 场景 | 项目 `assets/` | 启动场景 |
-| `game-core` 自有 UI（设置、协议页、确认框等） | 插件 `assets/res/`，Asset Bundle `game-core` | 插件挂载目录可作为 Asset Bundle 构建与加载 |
+| `game-core` 自有 UI（设置、协议页、确认框、断网横幅、健康忠告加载页） | 插件 `assets/ui/`、`assets/compliance/` 脚本，运行时用代码构建节点（批次 5） | 不依赖 prefab 与贴图，无需编辑器即可修改与构建；样式集中在 `THEME` |
+| 隐私政策、用户协议文本 | 项目 `assets/resources/legal/{privacy,agreement}.txt` | 文本随项目修改，上线前替换为正式文本 |
 | `game-core` 脚本（含 Root 子类） | 插件非 bundle 目录 | 设为 bundle 的目录中的脚本需 `loadBundle` 后才可用；S0 已验证启动场景可引用插件非 bundle 目录的脚本，bundle 内 prefab 可引用插件非 bundle 目录的脚本 |
 
 项目侧资源由模板提供，升级说明逐版列出。教程的 `alert`、`confirm` prefab 与 develop 不兼容，不移植。
@@ -234,11 +235,13 @@ interface ISidebar {                 // 抖音必接
 ### 4.6 通用 UI（ui）
 
 - 提示 prefab（Toast、等待、遮罩）统一样式
-- 确认框、断网提示
-- 设置面板：音乐音效读写 `oops.audio`，震动开关存设备级 key
-- 隐私政策、用户协议页（System 层）
-- 顶部 UI 依据 `getTopInset()` 下移，Web 用默认内边距
-- 抖音侧边栏入口（主界面一级入口）+ 复访奖励
+- 确认框 `coreUi.confirm`（System 层）、断网横幅（Notify 层，自动随网络状态显示）
+- 设置面板 `coreUi.openSettings`（Dialog 层）：音乐音效读写 `oops.audio`，震动开关存设备级 key
+- 隐私政策、用户协议页 `coreUi.openDocument`（System 层，可滚动）；微信隐私政策页附《小游戏隐私保护指引》入口
+- 顶部避让：`getDesignInset()` 把平台安全区与胶囊位置换算为设计分辨率，内容放在胶囊下方；Web 用默认内边距 20；`SafeTopAdapter` 组件挂在顶部节点上自动下移；oops 的 `mobileSafeArea` 关闭，避免与之叠加
+- 抖音侧边栏入口 `coreUi.createSidebarEntry(parent)`（平台不支持时不创建）+ `sidebarReward` 复访奖励（每天一次）+ `onSidebarLaunch`
+- 版本更新就绪时弹窗确认后应用
+- 以上界面用代码构建节点，`coreOptions` 可关闭断网横幅、更新弹窗、健康忠告加载页
 
 ### 4.7 合规（compliance）
 
@@ -360,9 +363,9 @@ interface ISidebar {                 // 抖音必接
 | `IAds` + 频控 | `ads/*` | 三种结果与失败原因可区分；频控单测通过 | 前置 #5 |
 | 抖音侧边栏 | `platform/impl/douyin.ts`（`DouyinSidebar`）、主界面入口 | 上传预检通过；按官方方法验证复访奖励 | M1a |
 | 错误钩子、网络、更新 | `platform` | 断网提示出现与消失正确；更新弹窗可应用 | M1a |
-| 隐私流程 | `compliance/privacy` | 同意、拒绝两条路径都可继续游戏 | M1a |
+| 隐私流程 | `compliance/PrivacyFlow.ts` | 同意、拒绝两条路径都可继续游戏 | M1a |
 | 通用 UI | `ui/*` | 设置、协议页、确认框、顶部避让在三端截图验收 | M1a |
-| 健康忠告 | `compliance/splash` | 三端加载页展示 | M1a |
+| 健康忠告 | `compliance/HealthNotice.ts` | 三端加载页展示 | M1a |
 
 ### M2 构建与示例游戏（7 天）
 

@@ -117,6 +117,52 @@ const { safeTop, menuRect } = platform.getTopInset(); // 窗口逻辑像素
 - `platform.share()` 必须在触摸回调里同步调用；微信分享结果固定为 `unknown`，分享不发奖励
 - 业务代码只能通过 `platform` 使用平台能力，不能直接访问 `wx`、`tt`
 
+### 通用 UI 与合规
+
+```ts
+import {
+  coreOptions,
+  coreUi,
+  createPrivacyPrompt,
+  onSidebarLaunch,
+  privacy,
+  settings,
+  sidebarReward,
+} from 'db://game-core';
+
+// 模块顶层设置，启动时生效
+coreOptions.ageRating = '12+';
+coreOptions.sidebarEntry.rewardText = '从侧边栏进入，每天领取 100 金币';
+privacy.useCustomPrompt(createPrivacyPrompt({ guideName: '《xx小游戏隐私保护指引》' })); // 默认使用平台官方弹窗
+
+const ok = await coreUi.confirm({ title: '提示', content: '确定退出关卡？' });
+coreUi.openSettings();
+settings.vibrate('short'); // 震动开关关闭时不震动
+
+void coreUi.createSidebarEntry(topBarNode); // 仅抖音创建
+onSidebarLaunch(() => {
+  if (sidebarReward.claim()) grantReward(); // 奖励由业务发放，须与 rewardText 一致
+});
+
+coreUi.setConfirm((options) => openMyDialog(options)); // 替换模板内全部确认框
+```
+
+| `coreOptions` 字段                    | 默认                   | 作用                                                              |
+| ------------------------------------- | ---------------------- | ----------------------------------------------------------------- |
+| `healthNotice` / `healthNoticeMinMs`  | `true` / `1500`        | 启动时显示健康游戏忠告加载页及最短展示时间                        |
+| `ageRating`                           | `'8+'`                 | 加载页适龄提示角标，`null` 不显示；上线前按后台结果替换为正式图标 |
+| `offlineBanner` / `offlineBannerText` | `true`                 | 断网横幅                                                          |
+| `updatePrompt`                        | 确认框文案             | 新版本下载完成时询问是否重启，`false` 不弹窗                      |
+| `sidebarEntry`                        | `{ text, rewardText }` | 抖音侧边栏入口按钮与引导文案                                      |
+| `settingsTitle`                       | `'设置'`               | 设置面板标题                                                      |
+
+- 界面由代码构建，样式在 `THEME`；`addButton`、`addLabel`、`openModal` 等构建函数可直接复用
+- 顶部避让：`assets/resources/config.json` 的 `mobileSafeArea` 保持 `false`，顶部 UI 挂 `SafeTopAdapter` 组件或按 `getDesignInset().top` 下移（`safeTop` 只避开刘海，适合与胶囊同一行的左侧元素）
+- 隐私：`privacy.needAuthorization()` 预判是否需要授权；`useCustomPrompt` 须在任何隐私接口调用前注册；同意或拒绝都可继续游戏；抖音无法打开平台指引时显示游戏内隐私政策
+- 侧边栏：登录完成前从侧边栏进入的，`onSidebarLaunch` 在登录后回调；同一次进入可能回调多次，用 `sidebarReward.claim()` 判重
+- 启动加载页在 LayerSystem 并拦截输入；启动步骤中需要交互的界面用 `coreUi.confirm`，或先 `await healthNotice.hide()`
+- 隐私政策、用户协议文本在 `assets/resources/legal/`，按行渲染，长度不限；上线前替换为正式文本，并与平台后台的隐私保护指引一致
+
 ## 存储 key
 
 oops 存储接口的 key 类型为全局 `GameStorageKey`，由 `OopsFramework.TypedGameStorageKey` 推导。业务新增 key：

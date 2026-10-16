@@ -1,5 +1,19 @@
 # game-core 变更记录
 
+## 0.4.0（未发布）
+
+- 通用 UI（代码构建节点，样式见 `THEME`，构建函数 `addButton`、`addLabel`、`addPanel`、`openModal` 等可复用）：`coreUi.confirm` 确认框（高度随正文，可带链接按钮）、`coreUi.setConfirm` 替换模板内全部确认框、`coreUi.openSettings` 设置面板（音乐、音效、震动，隐私政策与用户协议入口）、`coreUi.openDocument` 协议页（按行渲染、可滚动，文本取自 `resources/legal`）、断网横幅、版本更新确认弹窗、`coreUi.createSidebarEntry` 抖音侧边栏入口；设置面板与协议页重复打开时不叠加
+- 顶部避让：`getDesignInset()` 返回 `top`（避开刘海与胶囊）与 `safeTop`（仅刘海），换算为设计分辨率单位，Web 默认 20；`SafeTopAdapter` 组件
+- 合规：启动时显示健康游戏忠告加载页（适龄提示占位、加载进度，至少展示 1.5s，启动失败时清空进度）；`privacy` 默认使用平台官方隐私弹窗，`privacy.useCustomPrompt(createPrivacyPrompt({ guideName }))` 改用自定义弹窗（上报曝光，同意或拒绝都可继续，平台无法打开指引时显示游戏内隐私政策）；`privacy.needAuthorization()`；`IAntiAddiction` 接口与平台托管实现
+- `settings`：音乐、音效开关读写 `oops.audio`（重新打开音乐时恢复播放），震动开关存设备级存档，`settings.vibrate()` 关闭时不震动
+- `sidebarReward`：从侧边栏进入每天可领取一次，登录前不可领取；`onSidebarLaunch` 在启动或切回前台且来自侧边栏时回调，登录前进入的在登录后回调
+- `coreOptions`：`healthNotice`、`healthNoticeMinMs`、`ageRating`、`offlineBanner`、`offlineBannerText`、`updatePrompt`、`sidebarEntry`、`settingsTitle`
+
+### 项目侧资源
+
+- `assets/resources/legal/privacy.txt`、`agreement.txt`：隐私政策与用户协议占位文本，上线前替换
+- `assets/resources/config.json` 各环境 `mobileSafeArea` 改为 `false`，顶部避让由 `getDesignInset` / `SafeTopAdapter` 负责
+
 ## 0.3.0（未发布）
 
 - `platform`：`IPlatform` 的 Web、微信、抖音实现，按 `cc/env` 的 `WECHAT`、`BYTEDANCE` 选择；登录、会话检查、启动与 onShow 参数（启动时同步注册 onShow）、分享与分享菜单（重复设置替换监听）、系统信息、顶部避让（安全区与状态栏取大值，微信胶囊、抖音 `tt.getMenuButtonLayout`）、网络类型与变化、震动、剪贴板、隐私接口（曝光上报；查询失败按需要授权处理；抖音基础库低于 4.17.0 时不注册监听）、版本更新与下载失败、平台错误与内存告警钩子、envVersion、存储用量
