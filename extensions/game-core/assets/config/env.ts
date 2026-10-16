@@ -18,3 +18,12 @@ declare module 'db://oops-framework/module/config/GameConfig' {
 export function getEnv(): IConfigEnvironment {
     return oops.config.game.data;
 }
+
+interface GameConfigInternals {
+    _data: { type: string; config: Record<string, unknown> };
+}
+
+/** config.json 的 type 与各环境配置（读取 oops GameConfig 的内部字段） */
+export function gameConfigData(): { type: string; config: Record<string, unknown> } {
+    return (oops.config.game as unknown as GameConfigInternals)._data;
+}

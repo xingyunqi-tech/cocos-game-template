@@ -1,0 +1,182 @@
+import { AudioSource, sys } from 'cc';
+import { DEBUG } from 'cc/env';
+import { oops } from 'db://oops-framework/core/Oops';
+import { AdService } from '../ads/AdService';
+import { BootPipeline } from '../boot/BootPipeline';
+import { Lifecycle } from '../boot/Lifecycle';
+import { HealthNotice } from '../compliance/HealthNotice';
+import { assertReleasable, unloadBundle } from '../config/Bundles';
+import { RemoteConfig, type RemoteSettingsMap } from '../config/RemoteConfig';
+import { createLogger } from '../monitor/logger';
+import { track } from '../monitor/track';
+import { HttpClient } from '../net/HttpClient';
+import { MockTransport } from '../net/MockTransport';
+import { XhrTransport } from '../net/XhrTransport';
+import { PaymentService } from '../payment/Payment';
+import { AppUpdate } from '../platform/AppUpdate';
+import { createPlatform } from '../platform/createPlatform';
+import { NetworkStatus } from '../platform/NetworkStatus';
+import type { IPlatform } from '../platform/types';
+import type { KeyValueStore } from '../save/KeyValueStore';
+import { SaveStore } from '../save/SaveStore';
+import { ServerTime } from '../time/ServerTime';
+import { showConfirm, type ConfirmOptions } from '../ui/ConfirmDialog';
+import { toDesignInset, type DesignInset } from '../ui/inset';
+import { setButtonClickHook, visibleSize } from '../ui/kit';
+import { setSafeTopProvider } from '../ui/SafeTopAdapter';
+import { Settings } from '../ui/Settings';
+import { SoundService, type SoundRef } from '../ui/Sound';
+
+const storage = () => sys.localStorage as KeyValueStore;
+const localStore: KeyValueStore = {
+    getItem: (key) => storage().getItem(key),
+    setItem: (key, value) => storage().setItem(key, value),
+    removeItem: (key) => storage().removeItem(key),
+};
+
+const log = createLogger('game-core');
+const saveWarn = (message: string, detail: Record<string, unknown>) => log.warn(message, detail);
+
+export const platform: IPlatform = createPlatform({ debug: DEBUG });
+export const bootPipeline = new BootPipeline();
+export const lifecycle = new Lifecycle();
+export const xhrTransport = new XhrTransport();
+export const mockTransport = new MockTransport();
+export const http = new HttpClient({ transport: xhrTransport });
+export const serverTime = new ServerTime({ monotonic: () => platform.monotonicNow() });
+http.useResponse((response) => {
+    if (!serverTime.synced && !response.headers.age) serverTime.syncFromDateHeader(response.headers.date);
+    return response;
+});
+export const payment = new PaymentService((item, result) =>
+    track('pay_result', { productId: item.productId, price: item.price, result: result.result, reason: result.reason }),
+);
+export const deviceSave = new SaveStore({ store: localStore, prefix: 'gc:d', onWarn: saveWarn });
+export const userSave = new SaveStore({ store: localStore, prefix: 'gc:u', requireScope: true, onWarn: saveWarn });
+export const remoteConfig = new RemoteConfig<RemoteSettingsMap>({ reviewMode: false, shareReward: false });
+
+export const coreOptions = {
+    /** 启动时显示健康游戏忠告加载页 */
+    healthNotice: true,
+    /** 加载页最短展示时间 */
+    healthNoticeMinMs: 1500,
+    /** 适龄提示文字，null 不显示 */
+    ageRating: '8+' as string | null,
+    offlineBanner: true,
+    offlineBannerText: '网络已断开，请检查网络设置',
+    /** false 不弹窗，新版本在下次冷启动时生效 */
+    updatePrompt: {
+        title: '更新提示',
+        content: '新版本已准备好，是否重启应用？',
+        confirmText: '重启',
+        cancelText: '稍后',
+    } as ConfirmOptions | false,
+    sidebarEntry: {
+        text: '侧边栏',
+        /** 须与业务实际发放的奖励一致 */
+        rewardText: '从抖音首页侧边栏进入游戏，每天可领取一次奖励',
+    },
+    settingsTitle: '设置',
+    /** 模板按钮的点击音效，null 不播放 */
+    clickSound: null as SoundRef | null,
+    /** 调试构建显示 GM 按钮 */
+    gm: true,
+};
+
+export type ConfirmProvider = (options: ConfirmOptions) => Promise<boolean>;
+let confirmProvider: ConfirmProvider = showConfirm;
+
+/** 模板内所有确认框（隐私、更新、侧边栏引导）都经过这里 */
+export function confirm(options: ConfirmOptions): Promise<boolean> {
+    return confirmProvider(options);
+}
+
+export function setConfirmProvider(provider: ConfirmProvider) {
+    confirmProvider = provider;
+}
+
+export const STORAGE_WARN_RATIO = 0.8;
+export const LOGIN_STEP_TIMEOUT_MS = 30000;
+
+export const network = new NetworkStatus();
+export const appUpdate = new AppUpdate();
+export const ads = new AdService({
+    onResult: (kind, placement, outcome) =>
+        track('ad_result', {
+            kind,
+            placement,
+            result: outcome.result,
+            reason: outcome.reason,
+            errCode: outcome.errCode,
+        }),
+});
+ads.setProvider(platform.ads);
+
+const deviceSlot = deviceSave.slot('device', { version: 1, defaults: () => ({ id: '' }) });
+
+export function getDeviceId(): string {
+    let id = deviceSlot.get().id;
+    if (!id) {
+        id = `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+        deviceSlot.set({ id });
+        deviceSave.flush();
+    }
+    return id;
+}
+
+export function getDesignInset(): DesignInset {
+    return toDesignInset(platform.getTopInset(), platform.getSystemInfo().windowWidth, visibleSize().width);
+}
+setSafeTopProvider(() => getDesignInset().top);
+
+export const sound = new SoundService();
+
+/** 释放业务 Bundle：停止来自该 Bundle 的背景音乐、丢弃音频缓存，再释放全部资源；未加载时返回 false，引擎内置 Bundle 抛错 */
+export function releaseBundle(name: string): boolean {
+    assertReleasable(name);
+    sound.forgetBundle(name);
+    return unloadBundle(name);
+}
+setButtonClickHook(() => {
+    if (coreOptions.clickSound) void sound.playEffect(coreOptions.clickSound);
+});
+
+const settingsSlot = deviceSave.slot('settings', { version: 1, defaults: () => ({ vibrate: true }) });
+export const settings = new Settings(
+    () => {
+        const audio = oops.audio;
+        if (!audio?.music) return null;
+        return {
+            getMusic: () => audio.music.getSwitch(),
+            setMusic: (on) => {
+                audio.music.setSwitch(on);
+                audio.save();
+                if (!on) return;
+                const source = audio.music.getComponent(AudioSource);
+                if (source?.clip && !source.playing) source.play();
+                else if (!source?.clip) void sound.resumeMusic();
+            },
+            getEffect: () => audio.effect.getSwitch(),
+            setEffect: (on) => {
+                audio.effect.setSwitch(on);
+                audio.save();
+            },
+        };
+    },
+    { get: () => settingsSlot.get(), set: (value) => settingsSlot.set(value) },
+    (type) => platform.vibrate(type),
+);
+
+export const healthNotice = new HealthNotice();
+
+export function checkStorageUsage(ratio = STORAGE_WARN_RATIO): boolean {
+    const usage = platform.getStorageUsage();
+    if (!usage || usage.limitKB <= 0 || usage.currentKB / usage.limitKB < ratio) return false;
+    log.warn('本地存储接近上限', usage);
+    track('storage_high', { currentKB: usage.currentKB, limitKB: usage.limitKB });
+    return true;
+}
+
+export function setSaveUser(userId: string) {
+    userSave.setScope(userId);
+}

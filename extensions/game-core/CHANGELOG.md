@@ -17,6 +17,8 @@
 - `onUserReady(listener)`：登录步骤完成（含离线进入）或离线进入后重新联网登录成功时回调；`AuthService` 新增 `offline`、`onRecovered`
 - `releaseBundle(name)`：停止来自该 Bundle 的背景音乐、丢弃音频缓存并释放 Bundle；`sound.forgetBundle(name)`
 - `SafeTopAdapter`：节点有纵向对齐的 Widget 时调整 top / verticalCenter / bottom（含百分比），不再改坐标被 Widget 覆盖
+- 结构：`core.ts` 只负责装配与启动步骤注册顺序，单例与功能拆到 `wiring/`（`services`、`sidebar`、`ui`、`auth`、`remote`、`mocks`），公开接口不变；读取 oops `GameConfig` 内部字段收敛为 `config/env.ts` 的 `gameConfigData()`
+- 远程配置缓存 key 增加 envVersion（升级后首次启动的旧缓存失效一次）
 
 ## 1.1.0（2026-10-16）
 
