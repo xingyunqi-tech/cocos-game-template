@@ -42,7 +42,7 @@ export default tseslint.config(
         },
     },
     {
-        files: ['assets/game/**/*.ts'],
+        files: ['assets/game/**/*.ts', 'assets/bundles/**/*.ts'],
         rules: {
             'no-restricted-globals': ['error', 'wx', 'tt', 'window'],
             'no-restricted-syntax': ['error', GLOBAL_THIS],

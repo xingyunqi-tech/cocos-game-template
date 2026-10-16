@@ -78,6 +78,16 @@ describe('AuthService login', () => {
         expect(s.lastUser()).toBe('42');
     });
 
+    it('reports the server time from the login response', async () => {
+        const s = setup();
+        const onServerTime = vi.fn();
+        s.auth['options'].onServerTime = onServerTime;
+        s.auth['options'].mark = () => 77;
+        s.mock.on('POST', '/auth/login', () => ({ body: { token: 't', userId: 'u', expiresIn: 60, serverTime: 123 } }));
+        await s.auth.login();
+        expect(onServerTime).toHaveBeenCalledWith(123, 77);
+    });
+
     it('uses the device id as anonymous code when the platform has no code', async () => {
         const s = setup({ credential: {} });
         await expect(s.auth.login()).resolves.toEqual({ userId: 'u-dev1', offline: false });

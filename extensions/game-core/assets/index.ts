@@ -1,4 +1,4 @@
-export const GAME_CORE_VERSION = '1.0.1-dev';
+export const GAME_CORE_VERSION = '1.1.0';
 
 export { GameRoot, CONFIG_LOAD_ATTEMPTS, CONFIG_PATH } from './boot/GameRoot';
 export { BootPipeline, BootStepError } from './boot/BootPipeline';
@@ -8,6 +8,9 @@ export { retry } from './boot/retry';
 export { getEnv } from './config/env';
 export { RemoteConfig } from './config/RemoteConfig';
 export { Tables, TableStore } from './config/Tables';
+export { loadAsset, loadBundle, preloadBundle } from './config/Bundles';
+export { SoundService } from './ui/Sound';
+export type { SoundRef } from './ui/Sound';
 export type { TableMap, TableName } from './config/Tables';
 export {
     ads,
@@ -37,8 +40,11 @@ export {
     LOGIN_STEP_TIMEOUT_MS,
     mockTransport,
     network,
+    payment,
     platform,
     remoteConfig,
+    serverTime,
+    sound,
     setSaveUser,
     sidebar,
     STORAGE_WARN_RATIO,
@@ -144,3 +150,7 @@ export {
 export type { ButtonOptions, LabelOptions, LayerName, Modal } from './ui/kit';
 export { SafeTopAdapter } from './ui/SafeTopAdapter';
 export { Settings } from './ui/Settings';
+export { PaymentService, unsupportedPayment } from './payment/Payment';
+export type { IPayment, PayFailReason, PayItem, PayResult } from './payment/types';
+export { ServerTime } from './time/ServerTime';
+export type { ServerTimeOptions } from './time/ServerTime';

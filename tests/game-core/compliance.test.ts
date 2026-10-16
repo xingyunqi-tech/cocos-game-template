@@ -114,16 +114,16 @@ describe('PrivacyFlow', () => {
 describe('SidebarReward', () => {
     function setup(fromSidebar: boolean) {
         let saved = { lastClaimDay: '' };
-        let now = new Date(2026, 9, 15, 23, 0);
+        let day = '2026-10-15';
         let launched = fromSidebar;
         const reward = new SidebarReward({
             store: { get: () => saved, set: (v) => (saved = v) },
             launchedFromSidebar: () => launched,
-            now: () => now,
+            today: () => day,
         });
         return {
             reward,
-            setNow: (d: Date) => (now = d),
+            setDay: (d: string) => (day = d),
             setLaunched: (v: boolean) => (launched = v),
             saved: () => saved,
         };
@@ -135,8 +135,18 @@ describe('SidebarReward', () => {
         expect(s.reward.claim()).toBe(true);
         expect(s.saved()).toEqual({ lastClaimDay: '2026-10-15' });
         expect(s.reward.claim()).toBe(false);
-        s.setNow(new Date(2026, 9, 16, 0, 1));
+        s.setDay('2026-10-16');
         expect(s.reward.claim()).toBe(true);
+    });
+
+    it('uses the local date when no day source is given', () => {
+        let saved = { lastClaimDay: '' };
+        const reward = new SidebarReward({
+            store: { get: () => saved, set: (v) => (saved = v) },
+            launchedFromSidebar: () => true,
+        });
+        expect(reward.claim()).toBe(true);
+        expect(saved.lastClaimDay).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
 
     it('does not allow claims before saves are ready', () => {
@@ -146,6 +156,7 @@ describe('SidebarReward', () => {
             store: { get: () => saved, set: (v) => (saved = v) },
             launchedFromSidebar: () => true,
             ready: () => ready,
+            today: () => '2026-10-15',
         });
         expect(reward.claim()).toBe(false);
         ready = true;

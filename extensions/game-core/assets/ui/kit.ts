@@ -91,6 +91,13 @@ export function addLabel(parent: Node, text: string, options: LabelOptions = {})
     return label;
 }
 
+let clickHook: (() => void) | null = null;
+
+/** 所有 addButton 按钮点击时调用，用于统一点击音效 */
+export function setButtonClickHook(hook: (() => void) | null) {
+    clickHook = hook;
+}
+
 export interface ButtonOptions {
     width?: number;
     height?: number;
@@ -111,6 +118,11 @@ export function addButton(parent: Node, text: string, onClick: () => void, optio
     node.on(Node.EventType.TOUCH_CANCEL, () => node.setScale(1, 1));
     node.on(Node.EventType.TOUCH_END, () => {
         node.setScale(1, 1);
+        try {
+            clickHook?.();
+        } catch (err) {
+            console.warn('[game-core] 点击音效失败', err);
+        }
         onClick();
     });
     return node;

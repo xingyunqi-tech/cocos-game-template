@@ -13,6 +13,7 @@ import {
     platform,
     settings,
     sidebarReward,
+    sound,
     Tables,
     THEME,
     track,
@@ -21,6 +22,7 @@ import {
 } from 'db://game-core';
 import { demoSave } from './DemoSave';
 import { TapGame } from './TapGame';
+import { DEMO_BUNDLE, openRank } from './ui';
 
 export const SIDEBAR_REWARD = 100;
 export const PLACEMENTS = { doubleScore: 'double_score', backToMenu: 'back_to_menu' };
@@ -34,6 +36,7 @@ export class DemoApp {
 
     start() {
         platform.setShareMenu(SHARE);
+        void sound.playMusic({ bundle: DEMO_BUNDLE, path: 'audio/bgm' });
         onSidebarLaunch(() => {
             if (!sidebarReward.claim()) return;
             demoSave.addCoins(SIDEBAR_REWARD);
@@ -76,6 +79,12 @@ export class DemoApp {
             color: THEME.secondary,
             textColor: THEME.secondaryText,
         }).setPosition(0, -140);
+        addButton(screen, '排行榜', () => this.openRankOnce({ best: data.best, recent: [...data.recent] }), {
+            width: 360,
+            height: 88,
+            color: THEME.secondary,
+            textColor: THEME.secondaryText,
+        }).setPosition(0, -250);
     }
 
     play() {
@@ -174,6 +183,18 @@ export class DemoApp {
             },
             { width: 190, height: 80, color: THEME.secondary, textColor: THEME.secondaryText },
         ).setPosition(105, -260);
+    }
+
+    private rankOpening = false;
+
+    private openRankOnce(params: { best: number; recent: number[] }) {
+        if (this.rankOpening) return;
+        this.rankOpening = true;
+        openRank(params)
+            .catch((err: unknown) => console.warn('排行榜打开失败', err))
+            .finally(() => {
+                this.rankOpening = false;
+            });
     }
 
     private openScreen(name: string): Node {

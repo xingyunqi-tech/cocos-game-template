@@ -7,6 +7,8 @@ export interface LoginResponse {
     refreshToken: string;
     userId: string | number;
     expiresIn: number;
+    /** 服务器当前时间戳（毫秒），用于校准 serverTime */
+    serverTime?: number;
 }
 
 export interface RefreshResponse {
@@ -37,6 +39,9 @@ export interface AuthServiceOptions {
     lastUser: { get(): string; set(userId: string): void };
     onUser?: (userId: string) => void;
     onWarn?: (message: string, detail: Record<string, unknown>) => void;
+    onServerTime?: (serverMs: number, requestStartedAt: number) => void;
+    /** 发起登录请求时的时钟读数，传回 onServerTime */
+    mark?: () => number;
     fallback?: LoginFallback;
     loginPath?: string;
     refreshPath?: string;
@@ -150,6 +155,7 @@ export class AuthService implements TokenProvider {
     private async loginOnline(signal: CancelSignal | undefined, switchUser: boolean): Promise<AuthSession> {
         const platform = this.options.platform();
         const credential: LoginCredential = await platform.login();
+        const requestStartedAt = (this.options.mark ?? this.options.now ?? Date.now)();
         const deviceId = this.options.deviceId();
         if (!credential.code && !credential.anonymousCode) credential.anonymousCode = deviceId;
         const res = await this.options.http.post<LoginResponse>(
@@ -158,6 +164,7 @@ export class AuthService implements TokenProvider {
             { skipAuth: true, signal },
         );
         const data = res.data;
+        if (typeof data?.serverTime === 'number') this.options.onServerTime?.(data.serverTime, requestStartedAt);
         if (typeof data?.token !== 'string' || !data.token || (data.userId ?? '') === '') throw invalidResponse();
         if (String(data.userId).includes(':'))
             throw new HttpError('parse', `userId 不能包含冒号：${String(data.userId)}`);

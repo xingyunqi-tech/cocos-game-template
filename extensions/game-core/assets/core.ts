@@ -7,8 +7,11 @@ import { Lifecycle } from './boot/Lifecycle';
 import { getEnv } from './config/env';
 import { RemoteConfig } from './config/RemoteConfig';
 import { Tables } from './config/Tables';
+import { SoundService, type SoundRef } from './ui/Sound';
 import { AdService } from './ads/AdService';
 import { HealthNotice } from './compliance/HealthNotice';
+import { PaymentService } from './payment/Payment';
+import { ServerTime } from './time/ServerTime';
 import { installGmButton } from './debug/GmPanel';
 import { PrivacyFlow, type PrivacyPrompt } from './compliance/PrivacyFlow';
 import { SidebarReward } from './compliance/SidebarReward';
@@ -30,7 +33,7 @@ import { SaveStore } from './save/SaveStore';
 import { showConfirm, type ConfirmOptions } from './ui/ConfirmDialog';
 import { openDocument, type LegalDocument } from './ui/DocumentPage';
 import { toDesignInset, type DesignInset } from './ui/inset';
-import { visibleSize } from './ui/kit';
+import { setButtonClickHook, visibleSize } from './ui/kit';
 import { OfflineBanner } from './ui/OfflineBanner';
 import { setSafeTopProvider } from './ui/SafeTopAdapter';
 import { Settings } from './ui/Settings';
@@ -57,6 +60,14 @@ export const lifecycle = new Lifecycle();
 export const xhrTransport = new XhrTransport();
 export const mockTransport = new MockTransport();
 export const http = new HttpClient({ transport: xhrTransport });
+export const serverTime = new ServerTime();
+http.useResponse((response) => {
+    if (!serverTime.calibrated && !response.headers.age) serverTime.syncFromDateHeader(response.headers.date);
+    return response;
+});
+export const payment = new PaymentService((item, result) =>
+    track('pay_result', { productId: item.productId, price: item.price, result: result.result, reason: result.reason }),
+);
 export const deviceSave = new SaveStore({ store: localStore, prefix: 'gc:d', onWarn: saveWarn });
 export const userSave = new SaveStore({ store: localStore, prefix: 'gc:u', requireScope: true, onWarn: saveWarn });
 export const remoteConfig = new RemoteConfig<CoreRemoteSettings>({ reviewMode: false, shareReward: false });
@@ -83,6 +94,8 @@ export const coreOptions = {
         rewardText: '从抖音首页侧边栏进入游戏，每天可领取一次奖励',
     },
     settingsTitle: '设置',
+    /** 模板按钮的点击音效，null 不播放 */
+    clickSound: null as SoundRef | null,
     /** 调试构建显示 GM 按钮 */
     gm: true,
 };
@@ -167,8 +180,10 @@ export const settings = new Settings(
             setMusic: (on) => {
                 audio.music.setSwitch(on);
                 audio.save();
+                if (!on) return;
                 const source = audio.music.getComponent(AudioSource);
-                if (on && source?.clip && !source.playing) source.play();
+                if (source?.clip && !source.playing) source.play();
+                else if (!source?.clip) void sound.resumeMusic();
             },
             getEffect: () => audio.effect.getSwitch(),
             setEffect: (on) => {
@@ -192,6 +207,7 @@ export const sidebarReward = new SidebarReward({
     store: { get: () => sidebarSlot.get(), set: (value) => sidebarSlot.set(value) },
     launchedFromSidebar: () => sidebar.isLaunchedFromSidebar(),
     ready: () => userSave.hasScope,
+    today: () => serverTime.today(),
 });
 
 let pendingSidebarListeners: Array<() => void> = [];
@@ -224,6 +240,11 @@ function flushSidebarListeners() {
         }
     }
 }
+
+export const sound = new SoundService();
+setButtonClickHook(() => {
+    if (coreOptions.clickSound) void sound.playEffect(coreOptions.clickSound);
+});
 
 export const healthNotice = new HealthNotice();
 
@@ -304,6 +325,8 @@ export const auth = new AuthService({
     },
     onUser: (userId) => setSaveUser(userId),
     onWarn: (message, detail) => log.warn(message, detail),
+    onServerTime: (serverMs, startedAt) => serverTime.sync(serverMs, startedAt),
+    mark: () => serverTime.mark(),
 });
 
 bootPipeline.register(
@@ -406,6 +429,7 @@ function registerMocks() {
                 refreshToken: `mock-refresh-${id}`,
                 userId: `mock-${id}`,
                 expiresIn: 7200,
+                serverTime: Date.now(),
             },
         };
     });
@@ -536,6 +560,10 @@ export function initGameCore() {
             setAdSimulation: (value) => {
                 ads.simulate = value;
             },
+            paySimulation: () => payment.simulate,
+            setPaySimulation: (value) => {
+                payment.simulate = value;
+            },
             simulateSidebar: () => simulateSidebarLaunch(),
             clearSaves: () => {
                 userSave.clearScope();
@@ -563,6 +591,9 @@ export function initGameCore() {
             userSave,
             remoteConfig,
             Tables,
+            sound,
+            serverTime,
+            payment,
             simulateSidebarLaunch,
             setEnvOverride,
             platform,

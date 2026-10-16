@@ -1,10 +1,24 @@
 # game-core 变更记录
 
-## 1.0.1（未发布）
+## 1.1.0（2026-10-16）
+
+- `payment`：`IPayment` 接口（`pay(item)` 返回成功、失败、待确认与原因，可选 `queryOrder`），`PaymentService` 拒绝并发支付、120 秒未回调返回 `pending`、支持 GM 模拟；三端默认 `unsupported`
+- `serverTime`：登录响应 `serverTime` 校准，校准后按单调时钟推算、不受修改系统时间影响，未校准时用 HTTP `Date` 头（跳过带 `age` 头的缓存响应）；`now()`、`today()`（默认东八区）；`sidebarReward` 按服务器时间的自然日判断，`SidebarRewardOptions` 新增可选 `today`（缺省为本机日期），`now` 选项移除
+- `sound`：按 Bundle 与路径播放音乐、音效并缓存（加载失败 10 秒内不重试）；`coreOptions.clickSound` 为模板按钮设置点击音效；启动时音乐开关为关、之后打开时播放当前背景音乐
+- Bundle 工具：`loadBundle`、`preloadBundle`（进度不回退）、`loadAsset`
+- `AuthService`：`LoginResponse.serverTime`、`onServerTime`
+- GM 面板增加支付模拟
+
+### 项目侧资源
+
+- `settings/v2/packages/builder.json`：Bundle 配置预设 `subpackage`（小游戏分包）、`remote`（远程 Bundle）
+- `assets/bundles/demo/`：示例业务 Bundle（排行榜 prefab 界面、界面脚本、背景音乐与点击音效）
+- `assets/game/demo/ui.ts`：UIID 与 UIConfig 注册示例
 
 ### 构建
 
 - `update-core` 拉取 tag 时不输出 detached HEAD 提示
+- ESLint 业务层约束覆盖 `assets/bundles/`
 
 ## 1.0.0（2026-10-15）
 

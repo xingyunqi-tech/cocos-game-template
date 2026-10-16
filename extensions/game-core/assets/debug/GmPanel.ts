@@ -1,4 +1,5 @@
 import { profiler, type Node } from 'cc';
+import type { PayResult } from '../payment/types';
 import type { RewardedResult } from '../platform/types';
 import {
     THEME,
@@ -18,6 +19,8 @@ export interface GmActions {
     setEnv: (type: string) => void;
     adSimulation: () => RewardedResult['result'] | null;
     setAdSimulation: (value: RewardedResult['result'] | null) => void;
+    paySimulation: () => PayResult['result'] | null;
+    setPaySimulation: (value: PayResult['result'] | null) => void;
     simulateSidebar: () => void;
     clearSaves: () => void;
     confirm: (content: string) => Promise<boolean>;
@@ -28,8 +31,10 @@ export interface GmActions {
 
 const AD_MODES: Array<RewardedResult['result'] | null> = [null, 'completed', 'skipped', 'failed'];
 const AD_LABEL: Record<string, string> = { null: '关闭', completed: '完成', skipped: '跳过', failed: '失败' };
+const PAY_MODES: Array<PayResult['result'] | null> = [null, 'success', 'failed'];
+const PAY_LABEL: Record<string, string> = { null: '关闭', success: '成功', failed: '失败' };
 const WIDTH = 600;
-const HEIGHT = 820;
+const HEIGHT = 840;
 
 /** 调试面板入口按钮 */
 export function installGmButton(actions: GmActions): Node | null {
@@ -55,7 +60,7 @@ export function openGmPanel(actions: GmActions) {
     addLabel(panel, 'GM 调试', { fontSize: THEME.titleSize, width: WIDTH - 60 }).node.setPosition(0, HEIGHT / 2 - 60);
 
     const row = (index: number, label: string) => {
-        const y = HEIGHT / 2 - 150 - index * 100;
+        const y = HEIGHT / 2 - 140 - index * 88;
         addLabel(panel, label, { width: 180, align: 'left', fontSize: 26 }).node.setPosition(-WIDTH / 2 + 120, y);
         const area = createNode(`Row_${index}`, panel, WIDTH - 220, 70);
         area.setPosition(90, y);
@@ -105,8 +110,25 @@ export function openGmPanel(actions: GmActions) {
         actions.adSimulation() ? THEME.primary : THEME.subText,
     );
 
+    const payButton = addButton(
+        row(2, '支付模拟'),
+        PAY_LABEL[String(actions.paySimulation())],
+        () => {
+            const next = PAY_MODES[(PAY_MODES.indexOf(actions.paySimulation()) + 1) % PAY_MODES.length];
+            actions.setPaySimulation(next);
+            setButtonText(payButton, PAY_LABEL[String(next)], next ? THEME.primary : THEME.subText);
+        },
+        { width: 200, height: 60, fontSize: 24 },
+    );
+    payButton.name = 'PaySimulation';
+    setButtonText(
+        payButton,
+        PAY_LABEL[String(actions.paySimulation())],
+        actions.paySimulation() ? THEME.primary : THEME.subText,
+    );
+
     addButton(
-        row(2, '侧边栏'),
+        row(3, '侧边栏'),
         '模拟进入',
         () => {
             actions.simulateSidebar();
@@ -116,7 +138,7 @@ export function openGmPanel(actions: GmActions) {
     ).name = 'SimulateSidebar';
 
     const statsButton = addButton(
-        row(3, '性能面板'),
+        row(4, '性能面板'),
         profiler.isShowingStats() ? '隐藏' : '显示',
         () => {
             if (profiler.isShowingStats()) profiler.hideStats();
@@ -127,7 +149,7 @@ export function openGmPanel(actions: GmActions) {
     );
 
     addButton(
-        row(4, '存档'),
+        row(5, '存档'),
         '清空并重启',
         () => {
             void actions.confirm('清空设备与用户存档并重启？').then((ok) => {

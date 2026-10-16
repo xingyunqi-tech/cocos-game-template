@@ -62,7 +62,7 @@ python3 -m http.server -d build/web-mobile 8080    # 浏览器打开 http://127.
 
 ## 示例游戏与业务入口
 
-`assets/game/` 是示例游戏「点点乐」：首页（金币、设置、抖音侧边栏入口）→ 20 秒限时点击 → 结算（激励视频金币翻倍、分享成绩、插屏后返回首页），最高分与金币存在用户存档。
+`assets/game/` 与 `assets/bundles/demo/` 是示例游戏「点点乐」：启动时加载业务 Bundle（小游戏为分包），首页（金币、设置、排行榜 prefab 界面、抖音侧边栏入口、背景音乐）→ 20 秒限时点击 → 结算（激励视频金币翻倍、分享成绩、插屏后返回首页），最高分与金币存在用户存档。
 
 业务入口在模块顶层注册，启动流水线完成后调用：
 
@@ -71,9 +71,9 @@ import { setGameEntry } from 'db://game-core';
 setGameEntry(() => openMainScreen());
 ```
 
-开始自己的游戏时删除 `assets/game/` 整个目录即可，项目仍可构建运行（`npm run smoke:web -- --skip-demo` 验证）。
+开始自己的游戏时删除 `assets/game/`、`assets/bundles/demo/` 及同名 `.meta` 即可，项目仍可构建运行（`npm run smoke:web -- --skip-demo` 验证）。
 
-示例为了不依赖编辑器资源，界面用 `db://game-core` 的构建函数代码绘制；正式项目的界面用 prefab + `oops.gui.open`。可照抄的是流程：入口注册、存档 slot、广告结果分支（只有 `completed` 发奖）、分享在点击回调中同步调用、侧边栏奖励用 `claim()` 判重、等待广告期间锁住本页按钮。修改示例文案或节点名会影响 `npm run smoke:web` 的示例检查。
+示例的首页、玩法、结算用 `db://game-core` 的构建函数代码绘制，排行榜是 prefab 界面范例（见开发指南「prefab 界面」）；正式项目的界面建议用 prefab + `oops.gui.open`。可照抄的是流程：入口注册、存档 slot、广告结果分支（只有 `completed` 发奖）、分享在点击回调中同步调用、侧边栏奖励用 `claim()` 判重、等待广告期间锁住本页按钮。修改示例文案或节点名会影响 `npm run smoke:web` 的示例检查。
 
 ## 目录
 
@@ -84,6 +84,7 @@ assets/scenes/main.scene            启动场景，根节点挂 GameRoot
 assets/resources/config.json        环境配置（type: dev / test / prod）
 assets/resources/common/            提示 prefab（notify、wait、mask）
 assets/game/                        业务代码（示例游戏，可整体删除）
+assets/bundles/                     业务 Asset Bundle（示例 demo：排行榜 prefab、音频）
 build-configs/                      各平台构建参数（Cocos CLI configPath）
 scripts/                            构建、冒烟、包体、上传、配置表、脚手架、插件校验、game-core 升级脚本
 config-tables/                      配置表 Excel
@@ -124,7 +125,7 @@ track('level_up', { level: profile.get().level });
 
 ### 登录
 
-`login` 步骤调用 `POST /auth/login { platform, deviceId, code | anonymousCode }`，响应 `{ token, refreshToken, userId, expiresIn }`；请求 401 时调用 `POST /auth/refresh { refreshToken }`，失败再重新登录。userId 不能包含冒号。
+`login` 步骤调用 `POST /auth/login { platform, deviceId, code | anonymousCode }`，响应 `{ token, refreshToken, userId, expiresIn, serverTime? }`（`serverTime` 为毫秒时间戳，用于校准服务器时间）；请求 401 时调用 `POST /auth/refresh { refreshToken }`，失败再重新登录。userId 不能包含冒号。
 
 登录失败时的行为由 `config.json` 的 `loginFallback` 决定：
 
@@ -232,7 +233,7 @@ export {};
 - [开发计划](docs/development-plan.md)
 - [S0 技术验证报告](docs/spike-report.md)
 - [贡献流程](docs/contributing.md)
-- [开发指南](docs/guide.md)：分层约束、启动顺序、新增模块、配置表、平台差异、调试、删除示例
+- [开发指南](docs/guide.md)：分层约束、启动顺序、新增模块、prefab 界面、Bundle 与分包、音频、内购、服务器时间、横屏、配置表、平台差异、调试、删除示例
 - [升级指南](docs/upgrade.md)：game-core、oops、Creator 升级
 - [发布清单](docs/release-checklist.md)
 - [CI](docs/ci.md)

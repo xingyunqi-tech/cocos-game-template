@@ -1,3 +1,80 @@
 {
-  "__version__": "1.3.9"
+  "__version__": "1.3.9",
+  "bundleConfig": {
+    "custom": {
+      "subpackage": {
+        "displayName": "\u5c0f\u6e38\u620f\u5206\u5305",
+        "configs": {
+          "miniGame": {
+            "preferredOptions": {
+              "isRemote": false,
+              "compressionType": "subpackage"
+            },
+            "fallbackOptions": {
+              "compressionType": "merge_dep"
+            },
+            "configMode": "auto"
+          },
+          "web": {
+            "preferredOptions": {
+              "isRemote": false,
+              "compressionType": "merge_dep"
+            },
+            "fallbackOptions": {
+              "compressionType": "merge_dep"
+            },
+            "configMode": "auto"
+          },
+          "native": {
+            "preferredOptions": {
+              "isRemote": false,
+              "compressionType": "merge_dep"
+            },
+            "fallbackOptions": {
+              "compressionType": "merge_dep"
+            },
+            "configMode": "auto"
+          }
+        }
+      },
+      "remote": {
+        "displayName": "\u8fdc\u7a0b Bundle",
+        "configs": {
+          "miniGame": {
+            "preferredOptions": {
+              "isRemote": true,
+              "compressionType": "merge_dep"
+            },
+            "fallbackOptions": {
+              "compressionType": "merge_dep",
+              "isRemote": true
+            },
+            "configMode": "auto"
+          },
+          "web": {
+            "preferredOptions": {
+              "isRemote": true,
+              "compressionType": "merge_dep"
+            },
+            "fallbackOptions": {
+              "compressionType": "merge_dep",
+              "isRemote": true
+            },
+            "configMode": "auto"
+          },
+          "native": {
+            "preferredOptions": {
+              "isRemote": true,
+              "compressionType": "merge_dep"
+            },
+            "fallbackOptions": {
+              "compressionType": "merge_dep",
+              "isRemote": true
+            },
+            "configMode": "auto"
+          }
+        }
+      }
+    }
+  }
 }

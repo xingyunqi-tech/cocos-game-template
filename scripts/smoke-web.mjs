@@ -67,7 +67,7 @@ const port = server.address().port;
 const browser = await chromium.launch({
     executablePath: values.chrome ?? DEFAULT_CHROME[process.platform],
     headless: true,
-    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'],
+    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'],
 });
 const page = await browser.newPage({ viewport: { width: 720, height: 1280 } });
 const pageErrors = [];
@@ -376,6 +376,47 @@ try {
         });
         if (sidebarCoins !== `金币 ${expected + 100}`) throw new Error(`侧边栏复访奖励未发放：${sidebarCoins}`);
         checks.push('模拟侧边栏进入后发放复访奖励');
+        const bundleUi = await page.evaluate(async () => {
+            const scene = window.cc.director.getScene();
+            const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+            const until = async (check, ms = 10000) => {
+                const deadline = Date.now() + ms;
+                while (!check()) {
+                    if (Date.now() > deadline) throw new Error('等待超时');
+                    await wait(50);
+                }
+            };
+            const dialog = () => scene.getChildByPath('root/gui/LayerDialog/rank');
+            const bundleBeforeOpen = Boolean(window.cc.assetManager.getBundle('demo'));
+            scene.getChildByPath('root/gui/LayerUI/DemoMenu/Button_排行榜').emit('touch-end');
+            await until(() => Boolean(dialog()));
+            const label = (name) =>
+                dialog()
+                    .getChildByPath(`Panel/${name}`)
+                    .components.find((c) => typeof c.string === 'string').string;
+            const result = {
+                bundle: bundleBeforeOpen,
+                title: label('Title'),
+                list: label('List'),
+            };
+            dialog().getChildByPath('Panel/CloseButton').emit('touch-end');
+            await until(() => !dialog());
+            const music = window.oops.audio.music;
+            const source = music.components.find((c) => 'clip' in c);
+            result.musicClip = source?.clip?.name ?? null;
+            result.musicPlaying = Boolean(source?.playing);
+            return result;
+        });
+        if (!bundleUi.bundle) throw new Error('demo Bundle 未加载');
+        checks.push('业务 Bundle demo 已在启动流水线中加载');
+        if (!bundleUi.title.startsWith('最高分') || !bundleUi.list.includes('第 1 局')) {
+            throw new Error(`prefab 界面未收到参数：${JSON.stringify(bundleUi)}`);
+        }
+        checks.push('prefab 界面经 oops.gui.open 打开、接收参数并关闭');
+        if (bundleUi.musicClip !== 'bgm' || !bundleUi.musicPlaying) {
+            throw new Error(`背景音乐未播放：${JSON.stringify(bundleUi)}`);
+        }
+        checks.push('背景音乐从 Bundle 加载并播放');
     }
 
     if (values.screenshot) await page.screenshot({ path: values.screenshot });

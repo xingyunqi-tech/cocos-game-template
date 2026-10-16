@@ -1,6 +1,6 @@
 # cocos-game-template 开发计划
 
-> 版本：v6（2026-10-15）｜依赖统一取最新稳定版｜状态：S0 本机与 Web 验证通过、版本已锁定；小游戏模拟器运行、分离引擎、真机基线为遗留项（见 `spike-report.md` §7）
+> 版本：v7（2026-10-16）｜依赖统一取最新稳定版｜状态：批次 1–6、8 完成（Web 验证通过，game-core 1.0.0）；批次 7 与全部小游戏模拟器、真机验证待定；新增批次 9 模板补充（§7 M6）
 
 ## 1. 目标与范围
 
@@ -190,6 +190,12 @@ interface AdService {                  // core 导出的 ads
 }
 // AdFailReason: unsupported | not_configured | busy | frequency | load_failed | show_failed
 
+interface IPayment {                 // core 导出的 payment 包装：并发拒绝、GM 模拟
+  readonly supported: boolean;
+  pay(item: { productId: string; price: number; title?: string; extra?: Record<string, unknown> }):
+    Promise<{ result: 'success' | 'failed'; orderId?: string; reason?: 'unsupported' | 'cancelled' | 'order_failed' | 'pay_failed' | 'busy' }>;
+}
+
 interface ISidebar {                 // 抖音必接
   isSupported(): Promise<boolean>;   // tt.checkScene
   open(): Promise<boolean>;          // tt.navigateToScene
@@ -206,7 +212,7 @@ interface ISidebar {                 // 抖音必接
 - 抖音顶部避让使用 `tt.getMenuButtonLayout`；抖音隐私只使用 `tt.onNeedPrivacyAuthorization`（基础库 4.17.0，运行时能力检测），`getPrivacySetting`、`openPrivacyContract` 返回降级结果
 - Web 广告：调试构建（`DEBUG`）返回 completed，可改 `platform.ads.mode` 模拟其他结果；发布构建返回 failed / unsupported
 - 低频能力放 `IPlatformExtra`
-- `IPayment` 只定义 `pay(item)` 与服务端发货回调约定；微信 iOS 走 `wx.requestVirtualPayment`，抖音 Android 走 `tt.requestGamePayment`、iOS 走钻石兑换（P2 实施前核实）
+- `IPayment` 只定义 `pay(item)` 与服务端发货回调约定（批次 9 已定义，三端默认返回 unsupported）；微信 iOS 走 `wx.requestVirtualPayment`，抖音 Android 走 `tt.requestGamePayment`、iOS 走钻石兑换（P2 实施前核实）
 
 ### 4.3 网络（net）
 
@@ -408,11 +414,28 @@ interface ISidebar {                 // 抖音必接
 | 升级指南 | oops 与 game-core 升级流程 | 覆盖项目侧资源的合入步骤 |
 | 单测 | `tests/*` | 存档迁移、重试与 401 刷新、频控、侧边栏来源识别全部通过 |
 
+### M6 模板补充（8 天）
+
+批次 8 完成后对照"开箱即用"目标复核，补充业务开发起步必然用到、当前缺少范例或接口的部分。全部可在本地完成，不依赖真机与正式账号。
+
+| 任务 | 产出物 | 完成标准 | 依赖 |
+|---|---|---|---|
+| prefab 界面范例 | 示例游戏中 1 个 prefab 界面（如排行榜或商店）、`UIID` 枚举与 `UIConfig` 注册、界面组件基类用法、打开传参与关闭回调 | `oops.gui.open(UIID.Xxx, params)` 打开与关闭正常；三端构建无 error；开发指南写明 prefab 放置位置、注册方式与传参 | M4 |
+| 业务 Asset Bundle 与分包 | `assets/bundles/<名称>/`（设为 Bundle，小游戏端配置为分包）存放示例界面 prefab 与资源；启动后按进度加载；Bundle 加载失败可重试 | 微信、抖音构建产物出现分包，包体检查按分包统计；删除示例后不残留空 Bundle 配置 | prefab 界面范例 |
+| 远程 Bundle 范例 | 一个可选的远程 Bundle 配置与说明 | 以本地静态服务器作为 `REMOTE_SERVER` 时 Web 端可加载；上传检查覆盖 `remote/` 与服务器地址；正式 CDN 验证并入批次 7 | 业务 Asset Bundle |
+| 音频范例与封装 | 背景音乐、按钮音效各 1 个（无版权或自制）；`coreUi` 按钮默认音效开关；音频资源目录约定 | 设置面板开关音乐、音效立即生效；切后台暂停、回前台恢复；音频归设备级设置 | M1b |
+| 内购接口 | `IPayment`：`pay(item)`、结果类型、服务端发货回调约定；三端返回"不支持"的默认实现；GM 模拟支付 | 接口与约定写入 §4.2 与开发指南；单测覆盖结果分支；不实现真实支付（P2） | M1b |
+| 服务器时间 | `serverTime`：从登录响应或 HTTP `Date` 头校准，提供 `now()` 与自然日计算；`sidebarReward` 改用服务器时间 | 本机改时间后不能重复领取侧边栏奖励；无网络时回退本机时间并标记未校准；单测覆盖 | M4 |
+| 横屏支持说明 | 开发指南新增"横屏游戏"一节：设计分辨率、`build-configs` 方向、`game.json` 方向、顶部避让与示例界面的调整点 | 按文档切换为横屏后 Web 端可运行 | — |
+| 多语言（可选） | 模板界面文案接入 oops 多语言，`language/json` 补齐中英文 | 切换语言后模板界面文案随之变化；只做国内市场可跳过 | — |
+
+**风险**：prefab 与 Bundle 配置通常在编辑器中完成，命令行无法创建 prefab。处理方式：在编辑器中制作并保存后提交（需人工打开 Creator 一次），或手写 prefab 与 meta 后以三端构建与 Web 冒烟验证。
+
 ### P2（不排期）
 
 红点系统、虚拟列表、内购实现、云存档实现、开放数据域排行榜、订阅消息、WebSocket / TSRPC 联网示例。
 
-**合计 45 个工作日（S0 2 天 + 43 天），另留 20% 缓冲（约 9 天），总计约 54 个工作日。**
+**合计 45 个工作日（S0 2 天 + 43 天），另留 20% 缓冲（约 9 天），总计约 54 个工作日。M6 模板补充另计 8 个工作日。**
 
 ### 执行批次
 
@@ -429,6 +452,7 @@ interface ISidebar {                 // 抖音必接
 | 6 M2 构建与示例 | 构建 / 包体 / 上传脚本、构建优化、示例游戏、发布清单 | 开发 + 团队（CDN、体验版） | 一条命令出三端包；示例全链路通过 |
 | 7 M3 联调与提审 | 微信体验版、抖音提审、修正 | 团队为主 | 两端审核通过 |
 | 8 M4 + M5 | P1 完善、`game-core` v1.0.0 与升级演练、文档 | 开发 + 团队（埋点、CI） | §9 验收 12 条通过 |
+| 9 M6 模板补充 | prefab 界面范例、业务 Bundle 与分包、远程 Bundle 范例、音频、内购接口、服务器时间、横屏说明、多语言（可选） | 开发（制作 prefab 时需打开编辑器） | §9 验收第 13–16 条通过；Web 冒烟覆盖新增范例；game-core 发布 1.1.0 |
 
 批次 3 中不依赖引擎的部分（HttpClient、存档迁移、频控）可在 S0 结束后与批次 2 并行；批次 7 审核等待期间可并行批次 8 中不依赖审核结果的任务。
 
@@ -462,6 +486,10 @@ interface ISidebar {                 // 抖音必接
 10. §8 性能指标在机型矩阵上达标。
 11. `game-core` 升级演练成功：新 clone 项目执行 `update-core.sh` 后可构建运行。
 12. 文档覆盖：快速开始、新增模块、平台差异、发布清单、升级指南。
+13. 示例游戏包含 prefab 界面，通过 `oops.gui.open` 打开并传参；开发指南说明 prefab 界面的新增步骤。
+14. 小游戏构建包含业务分包，包体检查按主包、分包分别统计并通过；Bundle 加载失败可重试。
+15. 音乐、音效开关立即生效，前后台切换后音频状态正确。
+16. `IPayment` 接口、服务器时间可用；本机修改时间不影响按天发放的奖励。
 
 ## 10. 开发流程
 
