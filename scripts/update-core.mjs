@@ -81,9 +81,24 @@ function main() {
     const tag = `core-v${version}`;
     const work = mkdtempSync(join(tmpdir(), 'game-core-'));
     try {
-        execFileSync('git', ['clone', '--quiet', '--depth', '1', '--branch', tag, values.source, work], {
-            stdio: 'inherit',
-        });
+        execFileSync(
+            'git',
+            [
+                '-c',
+                'advice.detachedHead=false',
+                'clone',
+                '--quiet',
+                '--depth',
+                '1',
+                '--branch',
+                tag,
+                values.source,
+                work,
+            ],
+            {
+                stdio: 'inherit',
+            },
+        );
         const fetched = readVersion(work);
         if (fetched !== version) throw new Error(`${tag} 中 game-core 版本为 ${fetched}，与 ${version} 不一致`);
         if (!existsSync(join(work, LOCK_FILE))) throw new Error(`${tag} 中缺少 ${LOCK_FILE}`);
