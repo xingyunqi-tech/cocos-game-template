@@ -117,8 +117,8 @@ track('level_up', { level: profile.get().level });
 ```
 
 - 内置启动步骤依次为 `tables`、`login`、`remote-config`，业务步骤用不同的名字注册
-- 启动步骤在模块顶层注册，`GameRoot` 在 oops 初始化完成后按顺序执行；用 `{ before: 'remote-config' }` / `{ after: 'login' }` 指定位置，`ctx.signal` 在步骤超时或结束后触发
-- 必需步骤失败时显示“启动失败，点击重试”，点击后重新执行整条流水线
+- 启动步骤在模块顶层注册，`GameRoot` 在 oops 初始化完成后按顺序执行；用 `{ before: 'remote-config' }` / `{ after: 'login' }` 指定位置（锚点可以是其他模块注册的步骤，执行时解析，与脚本加载顺序无关；同一锚点的多个步骤按注册顺序排列；锚点缺失或循环依赖时启动失败），`ctx.signal` 在步骤超时或结束后触发
+- 必需步骤失败时显示“启动失败，点击重试”，点击后重新执行整条流水线；业务入口抛错时同样显示，点击后重新调用入口，入口需可重复执行
 - 设备级数据（设置、隐私同意）用 `deviceSave`，用户存档用 `userSave`；`login` 步骤完成后 `userSave` 已切到当前用户；不要调用 `oops.storage.setUser`
 - 存档对象可长期持有，切换用户或清空后自动重新读取；值可以是对象、数组或原始类型
 - `httpMock: true` 时请求走 `mockTransport`，用 `mockTransport.on(method, path, handler)` 注册假数据

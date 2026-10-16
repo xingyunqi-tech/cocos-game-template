@@ -72,7 +72,39 @@ describe('BootPipeline ordering and cancellation', () => {
             .register('login', () => undefined, { before: 'remote-config' })
             .register('preload', () => undefined, { after: 'login' });
         expect(pipeline.stepNames).toEqual(['login', 'preload', 'remote-config', 'enter']);
-        expect(() => pipeline.register('x', () => undefined, { after: 'missing' })).toThrow('未注册');
+    });
+
+    it('resolves anchors registered later and keeps registration order for the same anchor', async () => {
+        const order: string[] = [];
+        const step = (name: string) => () => void order.push(name);
+        const pipeline = new BootPipeline()
+            .register('shop', step('shop'), { after: 'bundle' })
+            .register('a', step('a'), { after: 'login' })
+            .register('login', step('login'))
+            .register('b', step('b'), { after: 'login' })
+            .register('bundle', step('bundle'), { after: 'login' })
+            .register('p1', step('p1'), { before: 'login' })
+            .register('p2', step('p2'), { before: 'login' });
+        expect(pipeline.stepNames).toEqual(['p1', 'p2', 'login', 'a', 'b', 'bundle', 'shop']);
+        await pipeline.run();
+        expect(order).toEqual(['p1', 'p2', 'login', 'a', 'b', 'bundle', 'shop']);
+    });
+
+    it('fails at run time when an anchor is missing or anchors form a cycle', async () => {
+        const missing = new BootPipeline().register('x', () => undefined, { after: 'missing' });
+        expect(() => missing.stepNames).toThrow('x → missing');
+        await expect(missing.run()).rejects.toThrow('锚点未注册或循环依赖');
+        const cycle = new BootPipeline()
+            .register('a', () => undefined, { after: 'b' })
+            .register('b', () => undefined, { after: 'a' });
+        await expect(cycle.run()).rejects.toThrow('a → b，b → a');
+        missing.register('missing', () => undefined);
+        await expect(missing.run()).resolves.toHaveLength(2);
+    });
+
+    it('rejects a step with both before and after', () => {
+        const pipeline = new BootPipeline().register('a', () => undefined);
+        expect(() => pipeline.register('b', () => undefined, { before: 'a', after: 'a' })).toThrow('同时指定');
     });
 
     it('ignores progress from a timed-out step and signals it to stop', async () => {

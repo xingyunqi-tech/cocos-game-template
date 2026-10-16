@@ -444,25 +444,26 @@ function registerMocks() {
 export type GameEntry = () => void | Promise<void>;
 let gameEntry: GameEntry | null = null;
 
-/** 注册业务入口，启动流水线完成后调用一次 */
+/** 注册业务入口，启动流水线完成后调用；抛错时显示启动失败，点击后重新调用，成功后不再调用 */
 export function setGameEntry(entry: GameEntry) {
     gameEntry = entry;
 }
 
+/** 返回 false 表示入口抛错 */
 export async function runGameEntry(): Promise<boolean> {
     const entry = gameEntry;
-    gameEntry = null;
     if (!entry) {
         log.info('未注册游戏入口');
-        return false;
+        return true;
     }
     try {
         await entry();
-        return true;
     } catch (err) {
         reportError(err, 'boot', { step: 'game-entry' });
         return false;
     }
+    if (gameEntry === entry) gameEntry = null;
+    return true;
 }
 
 let initialized = false;

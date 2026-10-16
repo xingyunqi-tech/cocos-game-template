@@ -419,6 +419,55 @@ try {
         checks.push('背景音乐从 Bundle 加载并播放');
     }
 
+    if (!values['skip-demo']) {
+        const retryPage = await browser.newPage({ viewport: { width: 720, height: 1280 } });
+        retryPage.on('pageerror', (err) => pageErrors.push(`重试页：${err.message}`));
+        const bundleRequests = { blocked: 0, allowed: 0 };
+        let blockBundle = true;
+        await retryPage.route('**/assets/demo/config*.json', (route) => {
+            if (blockBundle) {
+                bundleRequests.blocked++;
+                return route.abort();
+            }
+            bundleRequests.allowed++;
+            return route.continue();
+        });
+        await retryPage.goto(`http://127.0.0.1:${port}/?smoke=1`);
+        await retryPage.waitForFunction(
+            () => Boolean(window.cc?.director.getScene()?.getChildByPath('root/gui/BootFailed')),
+            null,
+            { timeout: Number(values.timeout) },
+        );
+        const failedText = await retryPage.evaluate(
+            () =>
+                window.cc.director
+                    .getScene()
+                    .getChildByPath('root/gui/BootFailed')
+                    .components.find((c) => typeof c.string === 'string').string,
+        );
+        if (failedText !== '启动失败，点击重试') throw new Error(`启动失败提示不符：${failedText}`);
+        blockBundle = false;
+        await retryPage.evaluate(() =>
+            window.cc.director.getScene().getChildByPath('root/gui/BootFailed').emit('touch-end'),
+        );
+        await retryPage.waitForFunction(
+            () => {
+                const scene = window.cc.director.getScene();
+                return (
+                    Boolean(scene.getChildByPath('root/gui/LayerUI/DemoMenu')) &&
+                    !scene.getChildByPath('root/gui/BootFailed')
+                );
+            },
+            null,
+            { timeout: Number(values.timeout) },
+        );
+        if (bundleRequests.blocked === 0 || bundleRequests.allowed === 0) {
+            throw new Error(`demo Bundle 请求次数不符：${JSON.stringify(bundleRequests)}`);
+        }
+        checks.push('启动步骤失败时显示重试，点击后重新执行流水线并进入首页');
+        await retryPage.close();
+    }
+
     if (values.screenshot) await page.screenshot({ path: values.screenshot });
 } catch (err) {
     pageErrors.push(`检查失败：${err.message}`);

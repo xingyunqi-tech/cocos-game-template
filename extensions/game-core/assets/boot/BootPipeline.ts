@@ -39,6 +39,8 @@ interface Step {
     weight: number;
     optional: boolean;
     timeoutMs?: number;
+    before?: string;
+    after?: string;
 }
 
 export interface PipelineHooks {
@@ -68,39 +70,68 @@ export class BootPipeline {
     private readonly steps: Step[] = [];
     private running = false;
 
+    /** before / after 在 run() 时解析，锚点可以晚于本步骤注册；同一锚点的多个步骤按注册顺序排列 */
     register(name: string, run: StepRun, options: StepOptions = {}): this {
         if (this.steps.some((s) => s.name === name)) throw new Error(`启动步骤重复注册：${name}`);
-        const step: Step = {
+        if (options.before !== undefined && options.after !== undefined) {
+            throw new Error(`启动步骤 ${name} 不能同时指定 before 与 after`);
+        }
+        this.steps.push({
             name,
             run,
             weight: Math.max(0, options.weight ?? 1),
             optional: options.optional ?? false,
             timeoutMs: options.timeoutMs,
-        };
-        const anchor = options.before ?? options.after;
-        if (anchor === undefined) {
-            this.steps.push(step);
-            return this;
-        }
-        const index = this.steps.findIndex((s) => s.name === anchor);
-        if (index < 0) throw new Error(`启动步骤 ${name} 的锚点 ${anchor} 未注册`);
-        this.steps.splice(options.before !== undefined ? index : index + 1, 0, step);
+            before: options.before,
+            after: options.after,
+        });
         return this;
     }
 
+    /** 解析后的执行顺序；锚点未注册或循环依赖时抛错 */
     get stepNames(): string[] {
-        return this.steps.map((s) => s.name);
+        return this.ordered().map((s) => s.name);
+    }
+
+    private ordered(): Step[] {
+        const placed = this.steps.filter((s) => s.before === undefined && s.after === undefined);
+        const lastAfter = new Map<string, Step>();
+        let pending = this.steps.filter((s) => !placed.includes(s));
+        while (pending.length > 0) {
+            const rest: Step[] = [];
+            for (const step of pending) {
+                const anchor = (step.before ?? step.after)!;
+                const target = placed.find((s) => s.name === anchor);
+                if (!target) {
+                    rest.push(step);
+                    continue;
+                }
+                if (step.before !== undefined) {
+                    placed.splice(placed.indexOf(target), 0, step);
+                } else {
+                    placed.splice(placed.indexOf(lastAfter.get(anchor) ?? target) + 1, 0, step);
+                    lastAfter.set(anchor, step);
+                }
+            }
+            if (rest.length === pending.length) {
+                const detail = rest.map((s) => `${s.name} → ${s.before ?? s.after}`).join('，');
+                throw new Error(`启动步骤的锚点未注册或循环依赖：${detail}`);
+            }
+            pending = rest;
+        }
+        return placed;
     }
 
     async run(hooks: PipelineHooks = {}): Promise<StepResult[]> {
         if (this.running) throw new Error('启动流水线正在运行');
+        const steps = this.ordered();
         this.running = true;
         const now = hooks.now ?? (() => Date.now());
-        const total = this.steps.reduce((sum, s) => sum + s.weight, 0) || 1;
+        const total = steps.reduce((sum, s) => sum + s.weight, 0) || 1;
         const results: StepResult[] = [];
         let done = 0;
         try {
-            for (const step of this.steps.slice()) {
+            for (const step of steps) {
                 const base = done;
                 const cancel = new CancelSource();
                 const report = (ratio: number) => {

@@ -10,6 +10,9 @@
 - `HttpClient` 不区分大小写判断已有的 Content-Type；`XhrTransport` 以小写发送请求头名，覆盖小游戏 adapter 默认的 `content-type`
 - 埋点上报：发送失败后的退避期间不再因满批立即发送；上报请求带 `skipRefresh`（新增 `HttpRequest.skipRefresh`：携带 token，401 时不刷新、不重新登录），401 改为退避重试；2xx 但响应解析或业务校验失败时丢弃该批，不再重发
 - `AuthService`：平台登录（`wx.login` / `tt.login`）10 秒无响应按网络失败处理，可用 `platformLoginTimeoutMs` 调整，并响应启动步骤的取消
+- 启动流水线：`before` / `after` 改为执行时解析，锚点可以晚于本步骤注册；同一锚点的多个步骤按注册顺序排列；锚点缺失或循环依赖时 `run()` 与 `stepNames` 抛错；同时指定 `before` 与 `after` 时注册抛错
+- 业务入口抛错时显示“启动失败，点击重试”，点击后重新调用入口，成功后不再调用
+- `smoke:web` 覆盖启动步骤失败后点击重试
 
 ## 1.1.0（2026-10-16）
 

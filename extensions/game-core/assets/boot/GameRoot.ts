@@ -31,7 +31,7 @@ function loadConfig(): Promise<JsonAsset> {
 
 @ccclass('GameRoot')
 export class GameRoot extends Root {
-    private stage: 'config' | 'pipeline' | 'done' = 'config';
+    private stage: 'config' | 'pipeline' | 'entry' | 'done' = 'config';
     private busy = false;
     private fallback: Label | null = null;
 
@@ -52,7 +52,8 @@ export class GameRoot extends Root {
         this.busy = true;
         if (this.fallback) this.fallback.string = LOADING_TEXT;
         if (this.stage === 'config') await this.loadConfigStage();
-        else await this.pipelineStage();
+        else if (this.stage === 'pipeline') await this.pipelineStage();
+        else await this.entryStage();
     }
 
     private async loadConfigStage() {
@@ -92,13 +93,23 @@ export class GameRoot extends Root {
             this.showFallback(BOOT_FAILED_TEXT);
             return;
         }
-        this.stage = 'done';
-        this.busy = false;
+        this.stage = 'entry';
         this.hideFallback();
         const elapsed = Date.now() - started;
         await healthNotice.hide(coreOptions.healthNoticeMinMs);
         track('boot_done', { ms: elapsed });
-        await runGameEntry();
+        await this.entryStage();
+    }
+
+    private async entryStage() {
+        const ok = await runGameEntry();
+        this.busy = false;
+        if (!ok) {
+            this.showFallback(BOOT_FAILED_TEXT);
+            return;
+        }
+        this.stage = 'done';
+        this.hideFallback();
     }
 
     private hideFallback() {

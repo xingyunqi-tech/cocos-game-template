@@ -17,7 +17,7 @@ extensions/oops-plugin-framework/  oops 框架，禁止修改
 
 `GameRoot` 加载 `config.json` → oops 初始化 → `initGameCore()` → 启动流水线（`tables` → `login` → `remote-config` → 业务步骤（示例为 `demo-bundle`））→ 关闭健康忠告加载页 → `setGameEntry` 注册的入口。
 
-业务步骤用 `bootPipeline.register(name, run, { after: 'login' })` 注册；必需步骤失败显示“启动失败，点击重试”，`optional: true` 的步骤失败只上报。
+业务步骤用 `bootPipeline.register(name, run, { after: 'login' })` 注册；锚点可以是其他模块注册的步骤，执行时解析。必需步骤失败显示“启动失败，点击重试”，`optional: true` 的步骤失败只上报。业务入口抛错时同样显示“启动失败，点击重试”，点击后重新调用入口（只重新调用入口，不重跑流水线），入口需可重复执行。
 
 ## 3. 新增业务模块
 
