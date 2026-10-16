@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ErrorReporter, type ErrorReport } from 'db://game-core/monitor/errors';
-import { DouyinPlatform } from 'db://game-core/platform/impl/douyin';
+import { DouyinPlatform, DouyinRecorder } from 'db://game-core/platform/impl/douyin';
 import { MiniGameAdProvider } from 'db://game-core/platform/impl/minigame';
 import { WechatPlatform } from 'db://game-core/platform/impl/wechat';
 import { asApi, FakeAd, fakeApi, setGlobal } from './fake-minigame';
@@ -440,5 +440,81 @@ describe('MiniGameAdProvider', () => {
             reason: 'load_failed',
             errCode: 1002,
         });
+    });
+});
+
+describe('DouyinRecorder', () => {
+    function recorderSetup() {
+        const listeners: Record<string, (res?: unknown) => void> = {};
+        const manager = {
+            start: vi.fn(() => listeners.start?.()),
+            stop: vi.fn(() => listeners.stop?.({ videoPath: 'ttfile://video.mp4' })),
+            onStart: (l: () => void) => (listeners.start = l),
+            onStop: (l: (res?: unknown) => void) => (listeners.stop = l),
+            onError: (l: (err?: unknown) => void) => (listeners.error = l),
+        };
+        const shareAppMessage = vi.fn((o: { success: () => void }) => o.success());
+        douyin({ getGameRecorderManager: () => manager, shareAppMessage });
+        let now = 0;
+        const recorder = new DouyinRecorder(() => now);
+        return { recorder, manager, listeners, shareAppMessage, advance: (ms: number) => (now += ms) };
+    }
+
+    it('records, returns the video path and shares it to the video channel', async () => {
+        const s = recorderSetup();
+        expect(s.recorder.supported).toBe(true);
+        await expect(s.recorder.start({ duration: 1 })).resolves.toBe(true);
+        expect(s.manager.start).toHaveBeenCalledWith({ duration: 3 });
+        s.advance(5000);
+        await expect(s.recorder.stop()).resolves.toBe('ttfile://video.mp4');
+        await expect(s.recorder.share('ttfile://video.mp4', { title: 't', topics: ['游戏'] })).resolves.toBe('success');
+        expect(s.shareAppMessage.mock.calls[0][0]).toMatchObject({
+            channel: 'video',
+            extra: { videoPath: 'ttfile://video.mp4', hashtag_list: ['游戏'], videoTopics: ['游戏'] },
+        });
+    });
+
+    it('returns null for recordings shorter than the minimum', async () => {
+        const s = recorderSetup();
+        await s.recorder.start();
+        s.advance(1000);
+        await expect(s.recorder.stop()).resolves.toBeNull();
+    });
+
+    it('keeps the video when recording ends automatically and rejects overlapping starts', async () => {
+        const s = recorderSetup();
+        await s.recorder.start();
+        await expect(s.recorder.start()).resolves.toBe(false);
+        s.advance(60000);
+        s.listeners.stop?.({ videoPath: 'ttfile://auto.mp4' });
+        await expect(s.recorder.stop()).resolves.toBe('ttfile://auto.mp4');
+        await expect(s.recorder.stop()).resolves.toBeNull();
+    });
+
+    it('stops a recording that starts after the start timeout', async () => {
+        vi.useFakeTimers();
+        try {
+            const s = recorderSetup();
+            s.manager.start.mockImplementation(() => undefined);
+            const started = s.recorder.start();
+            vi.advanceTimersByTime(3000);
+            await expect(started).resolves.toBe(false);
+            s.manager.stop.mockClear();
+            s.listeners.start?.();
+            expect(s.manager.stop).toHaveBeenCalledTimes(1);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('reports failures and missing support', async () => {
+        const s = recorderSetup();
+        s.manager.start.mockImplementation(() => s.listeners.error?.({ errMsg: 'fail' }));
+        await expect(s.recorder.start()).resolves.toBe(false);
+        await expect(s.recorder.stop()).resolves.toBeNull();
+        douyin();
+        const none = new DouyinRecorder();
+        expect(none.supported).toBe(false);
+        await expect(none.start()).resolves.toBe(false);
     });
 });

@@ -8,7 +8,15 @@ import type {
     SystemInfo,
     TopInset,
 } from '../types';
-import { invokeApi, MiniGameAdProvider, MiniGamePlatform, NoSidebar, toRect, toSystemInfo } from './minigame';
+import {
+    invokeApi,
+    MiniGameAdProvider,
+    MiniGamePlatform,
+    NoRecorder,
+    NoSidebar,
+    toRect,
+    toSystemInfo,
+} from './minigame';
 import type { RawSystemInfo, WechatApi } from './minigame-api';
 
 declare const wx: WechatApi;
@@ -19,6 +27,7 @@ export class WechatPlatform extends MiniGamePlatform {
     readonly name = 'wechat' as const;
     readonly ads = new MiniGameAdProvider(wx, { recreateInterstitialAfterShow: false });
     readonly sidebar: ISidebar = new NoSidebar();
+    readonly recorder = new NoRecorder();
     private readonly wx: WechatApi;
     private timelineListener: (() => ShareOptions) | null = null;
 

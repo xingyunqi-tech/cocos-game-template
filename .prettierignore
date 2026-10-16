@@ -14,3 +14,5 @@ docs/
 package-lock.json
 assets/**/*.pac
 extensions/**/*.pac
+assets/resources/tables/
+assets/game/tables/TableTypes.ts

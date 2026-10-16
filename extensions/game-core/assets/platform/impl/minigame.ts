@@ -4,6 +4,7 @@ import type {
     EnvVersion,
     InterstitialResult,
     IPlatform,
+    IRecorder,
     ISidebar,
     LaunchOptions,
     LoginCredential,
@@ -87,6 +88,22 @@ export class NoSidebar implements ISidebar {
 
     isLaunchedFromSidebar() {
         return false;
+    }
+}
+
+export class NoRecorder implements IRecorder {
+    readonly supported = false;
+
+    start() {
+        return Promise.resolve(false);
+    }
+
+    stop() {
+        return Promise.resolve(null);
+    }
+
+    share() {
+        return Promise.resolve('fail' as const);
     }
 }
 
@@ -186,6 +203,7 @@ export abstract class MiniGamePlatform implements IPlatform {
     abstract readonly name: PlatformName;
     abstract readonly ads: AdProvider;
     abstract readonly sidebar: ISidebar;
+    abstract readonly recorder: IRecorder;
 
     private readonly launchOptions: LaunchOptions;
     private showOptions: LaunchOptions;

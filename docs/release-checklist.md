@@ -6,6 +6,7 @@
 
 - [ ] `.env.local` 已填写正式 `WECHAT_APPID`、`DOUYIN_APPID`，发布构建未使用 `--allow-placeholder-appid`
 - [ ] `assets/resources/config.json` 的 `type` 为 `prod`，`httpMock` 为 `false`，`loginFallback` 符合产品要求；构建后在体验版确认环境（服务器地址）正确
+- [ ] prod 环境的 `remoteConfigPath`、`trackPath` 已填正式接口或确认留空
 - [ ] `npm run verify` 通过
 - [ ] `npm run build:wechat`、`npm run build:douyin` 成功，包体检查通过（主包 ≤ 4MB；微信总包 ≤ 30MB；抖音总包 ≤ 20MB，开通虚拟支付后改 `scripts/size-limits.json` 为 30MB）
 - [ ] 包体报告（构建输出中的主包、分包、remote 大小）已存档

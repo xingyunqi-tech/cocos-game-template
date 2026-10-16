@@ -1,5 +1,28 @@
 # game-core 变更记录
 
+## 1.0.0（2026-10-15）
+
+首个发布版本，包含 0.1.0 至 0.5.0 的全部内容。
+
+- 配置表：`Tables.get(name, id)`、`Tables.all(name)`，类型由生成的 `TableTypes.ts` 扩展 `TableMap`；启动步骤 `tables` 在 `login` 之前加载 `resources/tables`
+- 远程配置：`config.json` 的 `remoteConfigPath` 非空时启动拉取（附 platform、version、envVersion，单次 2.5s 不重试），成功缓存；失败或超时使用同一平台、版本、服务器的缓存，否则用默认值；`RemoteConfig.load` 增加 `fallback` 参数，来源增加 `cache`
+- 埋点上报：`trackPath` 非空时 `TrackUploader` 批量上报埋点与错误（20 条或 10 秒一批，失败指数退避，4xx 与序列化错误丢弃该批，缓冲上限 500 条，切后台发送全部）
+- 抖音录屏：`platform.recorder`（`IRecorder`），时长 3 到 300 秒，自动结束时保留视频，视频分享到 video 频道；其他平台 `supported` 为 false
+- GM 调试面板（调试构建）：切换环境、广告模拟（`ads.simulate`）、模拟侧边栏进入、性能面板、清空存档；`coreOptions.gm` 控制
+- `setGameEntry` 注册的入口只执行一次
+- 导出 `fetchRemoteConfig`、`TABLES_DIR`、`Tables`、`TableStore`
+
+### 项目侧资源
+
+- `assets/resources/config.json` 各环境新增 `remoteConfigPath`、`trackPath`
+- `config-tables/`、`assets/resources/tables/`、`assets/game/tables/TableTypes.ts`：配置表源文件与生成结果
+
+### 构建
+
+- `npm run tables`（新增 devDependency `exceljs`）、`npm run new:module`、`scripts/update-core.sh`
+- `scripts/check-plugins.mjs`：锁定文件记录版本；版本号以 `-dev` 结尾时只提示差异
+- `.prettierignore` 忽略配置表生成结果；`.github/workflows/ci.yml`
+
 ## 0.5.0（未发布）
 
 - `setGameEntry(entry)`：业务入口，启动流水线完成并关闭加载页后调用，只执行一次；未注册时只打日志，删除 `assets/game/` 后项目仍可运行

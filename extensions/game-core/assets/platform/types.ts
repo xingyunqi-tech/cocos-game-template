@@ -92,8 +92,23 @@ export interface ISidebar {
     isLaunchedFromSidebar(options: LaunchOptions): boolean;
 }
 
+export interface RecorderOptions {
+    /** 录制时长上限，秒 */
+    duration?: number;
+}
+
+export interface IRecorder {
+    readonly supported: boolean;
+    start(options?: RecorderOptions): Promise<boolean>;
+    /** 返回视频路径，失败或过短时为 null */
+    stop(): Promise<string | null>;
+    /** 需在触摸回调中同步调用 */
+    share(videoPath: string, options?: ShareOptions & { topics?: string[] }): Promise<ShareResult>;
+}
+
 export interface IPlatform {
     readonly name: PlatformName;
+    readonly recorder: IRecorder;
     readonly ads: AdProvider;
     readonly sidebar: ISidebar;
     login(): Promise<LoginCredential>;

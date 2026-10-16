@@ -20,6 +20,8 @@ export class AdService {
     private units: AdUnits = {};
     private showing = false;
     readonly policy: AdPolicy;
+    /** 调试用：设置后不调用平台广告，直接返回该结果 */
+    simulate: RewardedResult['result'] | null = null;
 
     constructor(private readonly options: AdServiceOptions = {}) {
         this.policy = options.policy ?? new AdPolicy();
@@ -42,6 +44,11 @@ export class AdService {
     }
 
     async showRewarded(placement: string): Promise<RewardedResult> {
+        if (this.simulate) {
+            const simulated: RewardedResult =
+                this.simulate === 'failed' ? { result: 'failed', reason: 'unsupported' } : { result: this.simulate };
+            return this.emit('rewarded', placement, simulated);
+        }
         const blocked = this.precheck(this.units.rewarded, placement);
         if (blocked) return this.emit('rewarded', placement, { result: 'failed', reason: blocked });
         const result = await this.run(() => this.provider!.showRewarded(this.unitFor(this.units.rewarded, placement)));
@@ -50,6 +57,11 @@ export class AdService {
     }
 
     async showInterstitial(placement: string): Promise<InterstitialResult> {
+        if (this.simulate) {
+            const simulated: InterstitialResult =
+                this.simulate === 'failed' ? { result: 'failed', reason: 'unsupported' } : { result: 'shown' };
+            return this.emit('interstitial', placement, simulated);
+        }
         const blocked = this.precheck(this.units.interstitial, placement);
         if (blocked) return this.emit('interstitial', placement, { result: 'failed', reason: blocked });
         if (this.policy.interstitialWaitMs() > 0) {

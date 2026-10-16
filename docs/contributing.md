@@ -26,7 +26,7 @@ npm run build -- web --debug && npm run smoke:web
 
 - `extensions/oops-plugin-framework` 禁止修改，`npm run check:plugins` 会校验
 - 升级 oops：替换目录后执行 `node scripts/check-plugins.mjs --update oops-plugin-framework --source <仓库@commit>`，用 `git add extensions/oops-plugin-framework && git add -f extensions/oops-plugin-framework/temp` 提交（插件自带的 `.gitignore` 会忽略上游已提交的 `temp/`），并复核开发计划 §2.3
-- `game-core` 发版：更新 `CHANGELOG.md` 与 `package.json` 版本，打 tag `core-vX.Y.Z`
+- `game-core` 发版按 [升级指南](upgrade.md) 的「模板仓库发版步骤」执行；两次发版之间 game-core 版本号保持 `X.Y.Z-dev`，否则 `check:plugins` 会因与锁定快照不一致而失败
 
 ## 编码约束
 

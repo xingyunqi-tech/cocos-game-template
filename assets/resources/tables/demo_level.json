@@ -1,0 +1,25 @@
+{
+  "1": {
+    "id": 1,
+    "name": "入门",
+    "duration": 20,
+    "spawnInterval": 0.7,
+    "targetLife": 1.3,
+    "radius": 56,
+    "tags": [
+      "新手",
+      "默认"
+    ]
+  },
+  "2": {
+    "id": 2,
+    "name": "进阶",
+    "duration": 20,
+    "spawnInterval": 0.55,
+    "targetLife": 1,
+    "radius": 48,
+    "tags": [
+      "挑战"
+    ]
+  }
+}

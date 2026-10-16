@@ -1,4 +1,4 @@
-export const GAME_CORE_VERSION = '0.5.0';
+export const GAME_CORE_VERSION = '1.0.0';
 
 export { GameRoot, CONFIG_LOAD_ATTEMPTS, CONFIG_PATH } from './boot/GameRoot';
 export { BootPipeline, BootStepError } from './boot/BootPipeline';
@@ -7,12 +7,16 @@ export { Lifecycle } from './boot/Lifecycle';
 export { retry } from './boot/retry';
 export { getEnv } from './config/env';
 export { RemoteConfig } from './config/RemoteConfig';
+export { Tables, TableStore } from './config/Tables';
+export type { TableMap, TableName } from './config/Tables';
 export {
     ads,
     appUpdate,
     auth,
     bootPipeline,
     checkStorageUsage,
+    fetchRemoteConfig,
+    TABLES_DIR,
     confirm,
     createPrivacyPrompt,
     coreOptions,
@@ -96,6 +100,7 @@ export type {
     EnvVersion,
     InterstitialResult,
     IPlatform,
+    IRecorder,
     ISidebar,
     LaunchOptions,
     LoginCredential,
@@ -103,6 +108,7 @@ export type {
     PlatformName,
     PrivacyHandler,
     PrivacySetting,
+    RecorderOptions,
     Rect,
     RewardedResult,
     ShareOptions,

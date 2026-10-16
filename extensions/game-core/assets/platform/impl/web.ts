@@ -17,7 +17,7 @@ import type {
     TopInset,
 } from '../types';
 import { parseQueryString } from '../utils';
-import { NoSidebar } from './minigame';
+import { NoRecorder, NoSidebar } from './minigame';
 
 export interface WebHost {
     location?: { search?: string; href?: string };
@@ -61,6 +61,7 @@ export class WebPlatform implements IPlatform {
     readonly name = 'web' as const;
     readonly ads: WebAdProvider;
     readonly sidebar: ISidebar = new NoSidebar();
+    readonly recorder = new NoRecorder();
     private readonly launchOptions: LaunchOptions;
 
     constructor(

@@ -393,8 +393,8 @@ interface ISidebar {                 // 抖音必接
 | 远程配置接远端 | `config/remote` | 改远端开关后重启生效 | 后端 |
 | 埋点服务 | `monitor/track` 实现 | 启动漏斗可在服务端查看 | 前置 #9 |
 | 配置表工具链 | `scripts/tables` | Excel 改动后一条命令生成 JSON + 类型 | — |
-| GM 面板 | `debug/*` | prod 构建不含 GM 代码 | — |
-| 抖音录屏分享 | `platform/impl/douyin/recorder` | 真机录屏并分享成功 | — |
+| GM 面板 | `debug/GmPanel.ts` | 发布构建不创建 GM 界面（批次 8：Cocos 不剔除未使用的项目脚本，GM 代码仍在包内） | — |
+| 抖音录屏分享 | `platform/impl/douyin.ts`（`DouyinRecorder`） | 真机录屏并分享成功 | — |
 | 脚手架 | 新模块模板 | 一条命令生成 view + 业务骨架 | — |
 | CI | Runner 配置与流水线 | 每次合并产出三端包与包体报告 | 前置 #10 |
 | `game-core` 首个版本 | tag `core-v1.0.0`、`scripts/update-core.sh` | 在一个新 clone 的项目上完成一次升级演练 | — |

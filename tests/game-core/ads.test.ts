@@ -119,6 +119,19 @@ describe('AdService', () => {
         expect(ads.policy.interstitialWaitMs()).toBe(30000);
     });
 
+    it('returns simulated results without calling the provider', async () => {
+        const p = provider();
+        const ads = new AdService();
+        ads.setProvider(p);
+        ads.simulate = 'skipped';
+        await expect(ads.showRewarded('any')).resolves.toEqual({ result: 'skipped' });
+        await expect(ads.showInterstitial('any')).resolves.toEqual({ result: 'shown' });
+        ads.simulate = 'failed';
+        await expect(ads.showRewarded('any')).resolves.toEqual({ result: 'failed', reason: 'unsupported' });
+        expect(p.rewarded).not.toHaveBeenCalled();
+        expect(p.interstitial).not.toHaveBeenCalled();
+    });
+
     it('converts provider exceptions into show_failed', async () => {
         const ads = new AdService();
         ads.setProvider(provider({ needsUnitId: false, showRewarded: () => Promise.reject(new Error('x')) }));

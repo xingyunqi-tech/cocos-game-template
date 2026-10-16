@@ -17,11 +17,12 @@ Creator 默认路径：macOS `/Applications/Cocos/Creator/3.8.8/CocosCreator.app
 
 ```bash
 npm install
-npm run build -- web --debug
-npm run smoke:web           # 无头 Chrome 启动 Web 包并检查初始化、环境配置、Toast
+npm run build -- web --debug                       # 首次构建需导入资源，约 1 到 2 分钟
+npm run smoke:web                                  # 无头 Chrome 检查启动、登录、UI 与示例游戏
+python3 -m http.server -d build/web-mobile 8080    # 浏览器打开 http://127.0.0.1:8080
 ```
 
-用 Cocos Dashboard 以 3.8.8 打开项目根目录即可在编辑器中开发与预览。
+用 Cocos Dashboard 以 3.8.8 打开项目根目录即可在编辑器中开发与预览。开发说明见 [开发指南](docs/guide.md)。
 
 ## 小游戏 AppID
 
@@ -38,7 +39,10 @@ npm run smoke:web           # 无头 Chrome 启动 Web 包并检查初始化、�
 | `npm run upload:douyin -- --version 1.0.0 --desc 说明`                       | 上传抖音测试版                                                                                                                    |
 | `npm run smoke:web [-- --skip-demo]`                                         | 运行 `build/web-mobile`（需 `--debug` 构建）；`--skip-demo` 用于删除示例游戏后                                                    |
 | `npm run verify`                                                             | 格式、lint、类型检查、单测、插件校验                                                                                              |
-| `npm run check:plugins`                                                      | 校验 `extensions/oops-plugin-framework` 与锁定快照一致                                                                            |
+| `npm run check:plugins`                                                      | 校验 `extensions/oops-plugin-framework` 与 `extensions/game-core` 与锁定快照一致                                                  |
+| `npm run tables`                                                             | `config-tables/*.xlsx` 生成配置表 JSON 与类型                                                                                     |
+| `npm run new:module -- <名称>`                                               | 生成业务模块骨架                                                                                                                  |
+| `scripts/update-core.sh <版本> --source <仓库>`                              | 升级 game-core                                                                                                                    |
 | `npm run gen:cc-env`                                                         | 由本机引擎 `cc.config.json` 生成 `types/cc-env.d.ts` 与测试 stub                                                                  |
 
 ### 上传与远程资源
@@ -81,7 +85,8 @@ assets/resources/config.json        环境配置（type: dev / test / prod）
 assets/resources/common/            提示 prefab（notify、wait、mask）
 assets/game/                        业务代码（示例游戏，可整体删除）
 build-configs/                      各平台构建参数（Cocos CLI configPath）
-scripts/                            构建、冒烟、插件校验脚本
+scripts/                            构建、冒烟、包体、上传、配置表、脚手架、插件校验、game-core 升级脚本
+config-tables/                      配置表 Excel
 types/                              无编辑器环境的类型声明
 docs/                               开发计划、验证报告、贡献流程、发布清单
 ```
@@ -90,7 +95,7 @@ docs/                               开发计划、验证报告、贡献流程�
 
 ## 环境配置
 
-`assets/resources/config.json` 的 `type` 选择 `config.dev / test / prod`。模板在 oops 字段之外增加 `httpServer`、`httpTimeout`、`httpMock`、`logLevel`、`loginFallback`，代码中用 `getEnv()` 读取。
+`assets/resources/config.json` 的 `type` 选择 `config.dev / test / prod`。模板在 oops 字段之外增加 `httpServer`、`httpTimeout`、`httpMock`、`logLevel`、`loginFallback`、`remoteConfigPath`（远程配置接口，空为只用默认值）、`trackPath`（埋点上报接口，空为只打日志），代码中用 `getEnv()` 读取。
 
 ## game-core 用法
 
@@ -110,7 +115,7 @@ profile.update((p) => (p.level += 1));
 track('level_up', { level: profile.get().level });
 ```
 
-- 内置启动步骤依次为 `login`、`remote-config`，业务步骤用不同的名字注册
+- 内置启动步骤依次为 `tables`、`login`、`remote-config`，业务步骤用不同的名字注册
 - 启动步骤在模块顶层注册，`GameRoot` 在 oops 初始化完成后按顺序执行；用 `{ before: 'remote-config' }` / `{ after: 'login' }` 指定位置，`ctx.signal` 在步骤超时或结束后触发
 - 必需步骤失败时显示“启动失败，点击重试”，点击后重新执行整条流水线
 - 设备级数据（设置、隐私同意）用 `deviceSave`，用户存档用 `userSave`；`login` 步骤完成后 `userSave` 已切到当前用户；不要调用 `oops.storage.setUser`
@@ -144,6 +149,11 @@ if (sidebar.isLaunchedFromSidebar()) grantSidebarReward();
 network.onChange((online) => showOfflineTip(!online));
 appUpdate.onReady(() => confirmAndApply(() => appUpdate.apply()));
 const { safeTop, menuRect } = platform.getTopInset(); // 窗口逻辑像素
+
+// 抖音录屏：stop() 在录制不足 3 秒时返回 null；share 必须在点击回调中同步调用
+if (platform.recorder.supported) await platform.recorder.start({ duration: 30 });
+const video = await platform.recorder.stop();
+if (video) void platform.recorder.share(video, { title: '看我的操作', topics: ['点点乐'] });
 ```
 
 - 小游戏端广告位必须先 `ads.configure`，否则返回 `failed` / `not_configured`；Web 调试构建模拟成功，发布构建返回 `unsupported`
@@ -189,6 +199,7 @@ coreUi.setConfirm((options) => openMyDialog(options)); // 替换模板内全部�
 | `updatePrompt`                        | 确认框文案             | 新版本下载完成时询问是否重启，`false` 不弹窗                      |
 | `sidebarEntry`                        | `{ text, rewardText }` | 抖音侧边栏入口按钮与引导文案                                      |
 | `settingsTitle`                       | `'设置'`               | 设置面板标题                                                      |
+| `gm`                                  | `true`                 | 调试构建显示 GM 按钮                                              |
 
 - 界面由代码构建，样式在 `THEME`；`addButton`、`addLabel`、`openModal` 等构建函数可直接复用
 - 顶部避让：`assets/resources/config.json` 的 `mobileSafeArea` 保持 `false`，顶部 UI 挂 `SafeTopAdapter` 组件或按 `getDesignInset().top` 下移（`safeTop` 只避开刘海，适合与胶囊同一行的左侧元素）
@@ -221,4 +232,7 @@ export {};
 - [开发计划](docs/development-plan.md)
 - [S0 技术验证报告](docs/spike-report.md)
 - [贡献流程](docs/contributing.md)
+- [开发指南](docs/guide.md)：分层约束、启动顺序、新增模块、配置表、平台差异、调试、删除示例
+- [升级指南](docs/upgrade.md)：game-core、oops、Creator 升级
 - [发布清单](docs/release-checklist.md)
+- [CI](docs/ci.md)

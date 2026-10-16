@@ -129,3 +129,33 @@ describe('RemoteConfig', () => {
         expect(config.get('reviewMode')).toBe(false);
     });
 });
+
+describe('RemoteConfig fallback', () => {
+    it('uses the cached values when the fetch fails or times out', async () => {
+        const config = new RemoteConfig({ a: 1, b: 2 });
+        await expect(
+            config.load(
+                () => Promise.reject(new Error('x')),
+                50,
+                () => ({ a: 9 }),
+            ),
+        ).resolves.toBe('cache');
+        expect(config.all()).toEqual({ a: 9, b: 2 });
+        await expect(
+            config.load(
+                () => new Promise(() => undefined),
+                10,
+                () => ({ b: 7 }),
+            ),
+        ).resolves.toBe('cache');
+        expect(config.all()).toEqual({ a: 1, b: 7 });
+        await expect(
+            config.load(
+                () => Promise.reject(new Error('x')),
+                50,
+                () => null,
+            ),
+        ).resolves.toBe('defaults');
+        expect(config.all()).toEqual({ a: 1, b: 2 });
+    });
+});

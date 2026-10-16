@@ -13,6 +13,7 @@ import {
     platform,
     settings,
     sidebarReward,
+    Tables,
     THEME,
     track,
     visibleSize,
@@ -89,6 +90,13 @@ export class DemoApp {
         const field = createNode('Field', screen, width - 40, height - getDesignInset().top - 200);
         field.setPosition(0, -60);
         const game = field.addComponent(TapGame);
+        const level = Tables.get('demo_level', 1);
+        if (level) {
+            game.duration = level.duration;
+            game.spawnInterval = level.spawnInterval;
+            game.targetLife = level.targetLife;
+            game.radius = level.radius;
+        }
         game.onScore = (value) => {
             score.string = `得分 ${value}`;
             settings.vibrate('short');

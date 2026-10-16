@@ -64,6 +64,8 @@ export interface InterstitialAd {
 }
 
 export interface ShareAppMessageOptions extends Callbacks {
+    channel?: string;
+    extra?: Record<string, unknown>;
     title?: string;
     imageUrl?: string;
     query?: string;
@@ -119,7 +121,16 @@ export interface WechatApi extends MiniGameApi {
     offShareTimeline?(listener: () => { title?: string; imageUrl?: string; query?: string }): void;
 }
 
+export interface GameRecorderManager {
+    start(options: { duration?: number }): void;
+    stop(): void;
+    onStart(listener: () => void): void;
+    onStop(listener: (res: { videoPath: string }) => void): void;
+    onError(listener: (err: ApiError) => void): void;
+}
+
 export interface DouyinApi extends MiniGameApi {
+    getGameRecorderManager?(): GameRecorderManager;
     getMenuButtonLayout?(): RawRect;
     getEnvInfoSync?(): { microapp?: { envType?: string } };
     checkScene?(options: Callbacks<{ isExist: boolean }> & { scene: string }): void;

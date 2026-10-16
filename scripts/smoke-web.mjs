@@ -288,6 +288,23 @@ try {
     if (ui.sidebarEntry !== null || ui.sidebarReward) throw new Error(`Web 不应有侧边栏入口：${JSON.stringify(ui)}`);
     checks.push('Web 不创建侧边栏入口');
 
+    const p1 = await page.evaluate(async () => {
+        const { Tables, ads } = window.gameCore;
+        const gm = window.cc.director.getScene().getChildByPath('root/gui/LayerNotify/GmButton');
+        ads.simulate = 'skipped';
+        const simulated = await ads.showRewarded('gm');
+        ads.simulate = null;
+        return { level: Tables.get('demo_level', 1)?.name, gm: Boolean(gm), simulated: simulated.result };
+    });
+    if (p1.level !== '入门') throw new Error(`配置表未加载：${JSON.stringify(p1)}`);
+    checks.push('配置表 demo_level 已加载');
+    if (!p1.gm || p1.simulated !== 'skipped') throw new Error(`GM 调试异常：${JSON.stringify(p1)}`);
+    checks.push('GM 按钮已创建，广告模拟生效');
+    if (!consoleLines.some((line) => line.includes('远程配置来源') && line.includes('remote'))) {
+        throw new Error('远程配置未从 mock 接口加载');
+    }
+    checks.push('远程配置从接口加载');
+
     if (values['skip-demo']) {
         const hasDemo = await page.evaluate(() =>
             Boolean(window.cc.director.getScene().getChildByPath('root/gui/LayerUI/DemoMenu')),
@@ -348,6 +365,17 @@ try {
         }
         if (demo.after !== `金币 ${expected}`) throw new Error(`首页金币未刷新：${JSON.stringify(demo)}`);
         checks.push('激励视频翻倍金币并写入用户存档，返回首页后显示');
+        const sidebarCoins = await page.evaluate(async () => {
+            window.gameCore.simulateSidebarLaunch();
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            const label = window.cc.director
+                .getScene()
+                .getChildByPath('root/gui/LayerUI/DemoMenu/Coins')
+                ?.components.find((c) => typeof c.string === 'string');
+            return label?.string;
+        });
+        if (sidebarCoins !== `金币 ${expected + 100}`) throw new Error(`侧边栏复访奖励未发放：${sidebarCoins}`);
+        checks.push('模拟侧边栏进入后发放复访奖励');
     }
 
     if (values.screenshot) await page.screenshot({ path: values.screenshot });

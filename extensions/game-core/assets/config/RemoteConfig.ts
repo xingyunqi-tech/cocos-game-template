@@ -1,6 +1,6 @@
 export type RemoteFetcher<T> = () => Promise<Partial<T>>;
 
-export type RemoteSource = 'defaults' | 'remote';
+export type RemoteSource = 'defaults' | 'cache' | 'remote';
 
 export class RemoteConfig<T extends object> {
     private values: T;
@@ -22,7 +22,12 @@ export class RemoteConfig<T extends object> {
         return this.currentSource;
     }
 
-    async load(fetcher?: RemoteFetcher<T>, timeoutMs = 3000): Promise<RemoteSource> {
+    /** 拉取失败或超时时使用 fallback 返回的缓存，没有缓存则使用默认值 */
+    async load(
+        fetcher?: RemoteFetcher<T>,
+        timeoutMs = 3000,
+        fallback?: () => Partial<T> | null,
+    ): Promise<RemoteSource> {
         this.values = { ...this.defaults };
         this.currentSource = 'defaults';
         if (!fetcher) return this.currentSource;
@@ -37,7 +42,9 @@ export class RemoteConfig<T extends object> {
             this.values = { ...this.defaults, ...remote };
             this.currentSource = 'remote';
         } catch {
-            this.currentSource = 'defaults';
+            const cached = fallback?.();
+            this.currentSource = cached ? 'cache' : 'defaults';
+            if (cached) this.values = { ...this.defaults, ...cached };
         } finally {
             clearTimeout(timer);
         }

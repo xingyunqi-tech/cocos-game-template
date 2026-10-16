@@ -1,21 +1,25 @@
-import { AudioSource, sys } from 'cc';
-import { DEBUG, HTML5 } from 'cc/env';
+import { AudioSource, JsonAsset, resources, sys } from 'cc';
+import { DEBUG, HTML5, MINIGAME } from 'cc/env';
 import { EventMessage } from 'db://oops-framework/core/common/event/EventMessage';
 import { oops } from 'db://oops-framework/core/Oops';
 import { BootPipeline } from './boot/BootPipeline';
 import { Lifecycle } from './boot/Lifecycle';
 import { getEnv } from './config/env';
 import { RemoteConfig } from './config/RemoteConfig';
+import { Tables } from './config/Tables';
 import { AdService } from './ads/AdService';
 import { HealthNotice } from './compliance/HealthNotice';
+import { installGmButton } from './debug/GmPanel';
 import { PrivacyFlow, type PrivacyPrompt } from './compliance/PrivacyFlow';
 import { SidebarReward } from './compliance/SidebarReward';
 import { errorReporter, reportError } from './monitor/errors';
 import { createLogger, logHub } from './monitor/logger';
 import { track, tracker } from './monitor/track';
+import { TrackUploader } from './monitor/TrackUploader';
 import { AuthService } from './net/AuthService';
 import { HttpClient } from './net/HttpClient';
 import { MockTransport } from './net/MockTransport';
+import { HttpError } from './net/types';
 import { XhrTransport } from './net/XhrTransport';
 import type { KeyValueStore } from './save/KeyValueStore';
 import { AppUpdate } from './platform/AppUpdate';
@@ -79,6 +83,8 @@ export const coreOptions = {
         rewardText: '从抖音首页侧边栏进入游戏，每天可领取一次奖励',
     },
     settingsTitle: '设置',
+    /** 调试构建显示 GM 按钮 */
+    gm: true,
 };
 
 export type ConfirmProvider = (options: ConfirmOptions) => Promise<boolean>;
@@ -111,8 +117,27 @@ export const sidebar = {
     isSupported: () => platform.sidebar.isSupported(),
     open: () => platform.sidebar.open(),
     /** 以最近一次 onShow 参数判断是否从侧边栏进入 */
-    isLaunchedFromSidebar: () => platform.sidebar.isLaunchedFromSidebar(platform.getShowOptions()),
+    isLaunchedFromSidebar: () => sidebarSimulated || platform.sidebar.isLaunchedFromSidebar(platform.getShowOptions()),
 };
+
+let sidebarSimulated = false;
+let sidebarListeners: Array<() => void> = [];
+
+/** 调试用：按从侧边栏进入处理，并触发 onSidebarLaunch 回调 */
+export function simulateSidebarLaunch() {
+    sidebarSimulated = true;
+    if (!userSave.hasScope) {
+        pendingSidebarListeners = Array.from(new Set(pendingSidebarListeners.concat(sidebarListeners)));
+        return;
+    }
+    for (const listener of sidebarListeners.slice()) {
+        try {
+            listener();
+        } catch (err) {
+            reportError(err, 'manual', { from: 'onSidebarLaunch' });
+        }
+    }
+}
 
 const deviceSlot = deviceSave.slot('device', { version: 1, defaults: () => ({ id: '' }) });
 const authSlot = deviceSave.slot('auth', { version: 1, defaults: () => ({ userId: '' }) });
@@ -177,11 +202,13 @@ export function onSidebarLaunch(listener: () => void): () => void {
         if (userSave.hasScope) listener();
         else pendingSidebarListeners.push(listener);
     }
+    sidebarListeners.push(listener);
     const off = platform.onShow((options) => {
         if (userSave.hasScope && platform.sidebar.isLaunchedFromSidebar(options)) listener();
     });
     return () => {
         off();
+        sidebarListeners = sidebarListeners.filter((l) => l !== listener);
         pendingSidebarListeners = pendingSidebarListeners.filter((l) => l !== listener);
     };
 }
@@ -199,6 +226,14 @@ function flushSidebarListeners() {
 }
 
 export const healthNotice = new HealthNotice();
+
+const gmSlot = deviceSave.slot('gm', { version: 1, defaults: () => ({ env: '' }) });
+
+/** 调试用：下次启动使用指定环境（dev / test / prod），空字符串恢复 config.json 的 type */
+export function setEnvOverride(type: string) {
+    gmSlot.set({ env: type });
+    deviceSave.flush();
+}
 const offlineBanner = new OfflineBanner({ top: () => getDesignInset().top, text: () => coreOptions.offlineBannerText });
 
 function openLegal(kind: LegalDocument) {
@@ -283,10 +318,71 @@ bootPipeline.register(
     { timeoutMs: LOGIN_STEP_TIMEOUT_MS },
 );
 
+export const TABLES_DIR = 'tables';
+
+bootPipeline.register(
+    'tables',
+    () =>
+        new Promise<void>((resolve, reject) => {
+            resources.loadDir(TABLES_DIR, JsonAsset, (err, assets) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                for (const asset of assets) Tables.set(asset.name, asset.json as Record<string, unknown>);
+                log.info('配置表', Tables.names.join(', ') || '无');
+                resolve();
+            });
+        }),
+    { before: 'login', timeoutMs: 10000 },
+);
+
+interface RemoteCache {
+    key: string;
+    values: Partial<CoreRemoteSettings>;
+}
+
+const remoteCache = deviceSave.slot<RemoteCache | null>('remote-config', { version: 2, defaults: () => null });
+
+function remoteCacheKey(): string {
+    const env = getEnv();
+    return `${platform.name}|${env.version}|${env.httpServer}`;
+}
+
+function cachedRemoteConfig(): Partial<CoreRemoteSettings> | null {
+    const cached = remoteCache.get();
+    return cached && cached.key === remoteCacheKey() ? cached.values : null;
+}
+
+/** 远程配置：按 platform、version、envVersion 拉取，成功后缓存 */
+export function fetchRemoteConfig(path: string): Promise<Partial<CoreRemoteSettings>> {
+    const env = getEnv();
+    return http
+        .get<Partial<CoreRemoteSettings>>(
+            path,
+            {
+                platform: platform.name,
+                version: env.version,
+                envVersion: platform.getEnvVersion(),
+            },
+            { timeoutMs: 2500, retries: 0 },
+        )
+        .then((res) => {
+            const values = res.data && typeof res.data === 'object' ? res.data : {};
+            remoteCache.set({ key: remoteCacheKey(), values });
+            return values;
+        });
+}
+
 bootPipeline.register(
     'remote-config',
     async () => {
-        const source = await remoteConfig.load();
+        const path = getEnv().remoteConfigPath;
+        const source = await remoteConfig.load(
+            path ? () => fetchRemoteConfig(path) : undefined,
+            3000,
+            cachedRemoteConfig,
+        );
         log.info('远程配置来源', source);
     },
     { optional: true, timeoutMs: 5000 },
@@ -300,7 +396,7 @@ export function checkStorageUsage(ratio = STORAGE_WARN_RATIO): boolean {
     return true;
 }
 
-function registerAuthMock() {
+function registerMocks() {
     mockTransport.on('POST', '/auth/login', ({ body }) => {
         const { deviceId, anonymousCode } = (body ?? {}) as { deviceId?: string; anonymousCode?: string };
         const id = (deviceId ?? anonymousCode ?? 'guest').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32);
@@ -318,6 +414,8 @@ function registerAuthMock() {
         if (!refreshToken.startsWith('mock-refresh-')) return { status: 401 };
         return { body: { token: `mock-token-${refreshToken.slice(13)}-${Date.now()}`, expiresIn: 7200 } };
     });
+    mockTransport.on('GET', '/config', () => ({ body: {} }));
+    mockTransport.on('POST', '/track', () => ({ body: { ok: true } }));
 }
 
 export type GameEntry = () => void | Promise<void>;
@@ -350,6 +448,10 @@ export function initGameCore() {
     if (initialized) return;
     initialized = true;
 
+    const override = DEBUG ? gmSlot.get().env : '';
+    const configs = (oops.config.game as unknown as { _data: { config: Record<string, unknown> } })._data.config;
+    if (override && override in configs)
+        oops.config.game.setConfigType(override as Parameters<typeof oops.config.game.setConfigType>[0]);
     const env = getEnv();
     logHub.setLevel(env.logLevel ?? (DEBUG ? 'debug' : 'warn'));
     errorReporter.addSink((report) => log.error(`[${report.source}] ${report.message}`, report.context));
@@ -365,7 +467,7 @@ export function initGameCore() {
         transport: env.httpMock ? mockTransport : xhrTransport,
         tokenProvider: auth,
         onError: (error, request) => {
-            if (error.kind === 'aborted') return;
+            if (error.kind === 'aborted' || (env.trackPath && request.url === env.trackPath)) return;
             reportError(error, 'http', {
                 method: request.method,
                 url: request.url,
@@ -376,7 +478,28 @@ export function initGameCore() {
     });
 
     auth.configure({ fallback: env.loginFallback ?? 'guest' });
-    if (env.httpMock) registerAuthMock();
+    if (env.httpMock) registerMocks();
+    if (env.trackPath) {
+        const path = env.trackPath;
+        const uploader = new TrackUploader({
+            send: (records) => http.post(path, { events: records }, { retries: 0 }).then(() => undefined),
+            isPermanent: (err) =>
+                !(err instanceof HttpError) ||
+                (err.kind === 'http' &&
+                    (err.status ?? 0) >= 400 &&
+                    (err.status ?? 0) < 500 &&
+                    ![408, 429].includes(err.status ?? 0)),
+        });
+        tracker.addSink((event) => uploader.push(event));
+        errorReporter.addSink((report) =>
+            uploader.push({
+                event: 'error',
+                params: { ...report.context, source: report.source, message: report.message, stack: report.stack },
+                time: report.time,
+            }),
+        );
+        lifecycle.onHide(() => void uploader.flushAll());
+    }
 
     lifecycle.bind(oops.message, EventMessage.GAME_SHOW, EventMessage.GAME_HIDE);
     lifecycle.onHide(() => {
@@ -403,6 +526,33 @@ export function initGameCore() {
     });
     appUpdate.onFailed(() => reportError('新版本下载失败', 'manual'));
 
+    if (DEBUG && coreOptions.gm) {
+        installGmButton({
+            envTypes: ['dev', 'test', 'prod'],
+            currentEnv: () =>
+                gmSlot.get().env || String((oops.config.game as unknown as { _data: { type: string } })._data.type),
+            setEnv: (type) => setEnvOverride(type),
+            adSimulation: () => ads.simulate,
+            setAdSimulation: (value) => {
+                ads.simulate = value;
+            },
+            simulateSidebar: () => simulateSidebarLaunch(),
+            clearSaves: () => {
+                userSave.clearScope();
+                deviceSave.clearScope();
+            },
+            confirm: (content) => confirm({ title: 'GM', content }),
+            toast: (text) => oops.gui.toast(text),
+            restart: () => {
+                if (!HTML5 || MINIGAME) return false;
+                deviceSave.flush();
+                userSave.flush();
+                window.location.reload();
+                return true;
+            },
+        });
+    }
+
     if (DEBUG && HTML5) {
         (window as unknown as Record<string, unknown>).gameCore = {
             bootPipeline,
@@ -412,6 +562,9 @@ export function initGameCore() {
             deviceSave,
             userSave,
             remoteConfig,
+            Tables,
+            simulateSidebarLaunch,
+            setEnvOverride,
             platform,
             ads,
             auth,
