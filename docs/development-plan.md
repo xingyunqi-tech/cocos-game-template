@@ -137,7 +137,7 @@ cocos-game-template/
 
 - `game-core` 每次发版打 tag（`core-vX.Y.Z`）并更新 CHANGELOG，破坏性变更升主版本并附迁移说明
 - 下游执行 `scripts/update-core.sh <version>` 替换 `extensions/game-core/`，项目侧资源变更按 CHANGELOG 手工合入
-- `npm run check:plugins` 校验 `oops-plugin-framework` 与 `game-core` 未被本地修改；`game-core` 的锁定快照随版本生成并分发（当前锁定 1.2.0；版本号为 `-dev` 时只提示差异）
+- `npm run check:plugins` 校验 `oops-plugin-framework` 与 `game-core` 未被本地修改；`game-core` 的锁定快照随版本生成并分发（当前锁定 1.2.1；版本号为 `-dev` 时只提示差异）
 
 ## 4. game-core 模块设计
 
@@ -236,6 +236,7 @@ interface ISidebar {                 // 抖音必接
 ### 4.4 存档（save）
 
 - 设备级 key（音频、震动、隐私同意、设备 ID）不带用户前缀；用户级 key（存档）在 `setUser` 后读写
+- 登录账号在本设备没有存档时，并入本设备游客身份的存档（首次启动离线进入后再登录成功的场景）
 - 存档带 `version` 与 `migrations[version]`
 - 写入节流；`GAME_HIDE` 同步落盘
 - 接近平台上限时告警（微信单 key 1MB、总量 10MB）

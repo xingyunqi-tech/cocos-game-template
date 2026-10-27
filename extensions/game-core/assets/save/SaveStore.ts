@@ -228,6 +228,45 @@ export class SaveStore {
         this.scopeGeneration++;
     }
 
+    /** 当前作用域没有存档时，把 from 作用域的存档移入当前作用域；返回是否移入 */
+    adoptScope(from: string): boolean {
+        if (from.includes(':')) throw new Error(`存档作用域不能包含冒号：${from}`);
+        if (!this.hasScope || !from) return false;
+        this.flush();
+        const source = `${this.options.prefix ?? 'gc'}:${from}:`;
+        const target = this.prefix;
+        if (source === target) return false;
+        const inScope = (prefix: string) => (key: string) =>
+            key.startsWith(prefix) && !key.slice(prefix.length).includes(':');
+        const index = this.readIndex();
+        if (index.some(inScope(target))) return false;
+        const moving = index.filter(inScope(source));
+        const moved: string[] = [];
+        for (const key of moving) {
+            const value = this.options.store.getItem(key);
+            if (value === null || value === undefined || value === '') continue;
+            const next = target + key.slice(source.length);
+            try {
+                this.options.store.setItem(next, value);
+                moved.push(next);
+            } catch (err) {
+                this.warn('存档迁移写入失败', { key: next, error: errorText(err) });
+                for (const written of moved) this.options.store.removeItem(written);
+                return false;
+            }
+        }
+        if (moved.length === 0) return false;
+        this.addToIndex(moved);
+        for (const key of moving) {
+            this.options.store.removeItem(key);
+            this.forgetVersion(key);
+        }
+        this.writeIndex(this.readIndex().filter((key) => !inScope(source)(key)));
+        for (const key of moved) this.forgetVersion(key);
+        this.scopeGeneration++;
+        return true;
+    }
+
     private isNewer(fullKey: string, version: number): boolean {
         let newer = this.newer.get(fullKey);
         if (newer === undefined) {

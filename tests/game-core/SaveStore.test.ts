@@ -111,6 +111,77 @@ describe('SaveStore', () => {
     });
 });
 
+describe('SaveStore adoptScope', () => {
+    function withGuestSave() {
+        const ctx = setup();
+        const slot = ctx.save.slot('profile', profile);
+        ctx.save.setScope('guest-d1');
+        slot.update((p) => (p.level = 5));
+        ctx.save.slot('extra', profile).set(profile.defaults());
+        ctx.save.flush();
+        return { ...ctx, slot };
+    }
+
+    it('moves the guest save into an empty current scope and removes the source', () => {
+        const { save, store, slot } = withGuestSave();
+        save.setScope('7');
+        expect(slot.get().level).toBe(1);
+        expect(save.adoptScope('guest-d1')).toBe(true);
+        expect(slot.get().level).toBe(5);
+        expect(store.getItem('gc:u:7:extra')).not.toBeNull();
+        expect(store.getItem('gc:u:guest-d1:profile')).toBeNull();
+        expect(store.getItem('gc:u:guest-d1:extra')).toBeNull();
+        save.clearScope();
+        expect(store.getItem('gc:u:7:profile')).toBeNull();
+    });
+
+    it('keeps both saves when the current scope already has data', () => {
+        const { save, store, slot } = withGuestSave();
+        save.setScope('7');
+        slot.update((p) => (p.level = 2));
+        expect(save.adoptScope('guest-d1')).toBe(false);
+        expect(slot.get().level).toBe(2);
+        expect(store.getItem('gc:u:guest-d1:profile')).not.toBeNull();
+    });
+
+    it('does nothing without a source save, without a scope, or for the same scope', () => {
+        const { save } = withGuestSave();
+        save.setScope('7');
+        expect(save.adoptScope('guest-other')).toBe(false);
+        save.setScope('guest-d1');
+        expect(save.adoptScope('guest-d1')).toBe(false);
+        save.setScope('');
+        expect(save.adoptScope('guest-d1')).toBe(false);
+    });
+
+    it('does not take keys from nested scopes', () => {
+        const { save, store } = setup();
+        store.setItem('gc:u:guest-d1:sub:x', JSON.stringify({ v: 2, d: {} }));
+        store.setItem('gc:u:__index', JSON.stringify(['gc:u:guest-d1:sub:x']));
+        save.setScope('7');
+        expect(save.adoptScope('guest-d1')).toBe(false);
+        expect(store.getItem('gc:u:guest-d1:sub:x')).not.toBeNull();
+    });
+
+    it('rolls back the copied keys and keeps the source when a write fails', () => {
+        const { store } = withGuestSave();
+        const onWarn = vi.fn();
+        const reopened = reopen(store, { onWarn });
+        reopened.setScope('7');
+        const setItem = store.setItem.bind(store);
+        let writes = 0;
+        vi.spyOn(store, 'setItem').mockImplementation((key, value) => {
+            if (key.startsWith('gc:u:7:') && ++writes === 2) throw new Error('full');
+            setItem(key, value);
+        });
+        expect(reopened.adoptScope('guest-d1')).toBe(false);
+        expect(store.getItem('gc:u:7:profile')).toBeNull();
+        expect(store.getItem('gc:u:7:extra')).toBeNull();
+        expect(store.getItem('gc:u:guest-d1:profile')).not.toBeNull();
+        expect(onWarn).toHaveBeenCalledWith('存档迁移写入失败', expect.objectContaining({ error: 'full' }));
+    });
+});
+
 describe('SaveStore edge cases', () => {
     it('invalidates a long-lived slot when the scope changes', () => {
         const { save, store } = setup();

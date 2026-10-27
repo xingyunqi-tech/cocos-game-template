@@ -1,9 +1,9 @@
 {
   "plugin": "game-core",
-  "version": "1.2.0",
-  "source": "core-v1.2.0",
+  "version": "1.2.1",
+  "source": "core-v1.2.1",
   "files": {
-    "CHANGELOG.md": "53d6f07f1d7a5db469843549f7570fb1ab0cb3d5cd6818b3bdaee5e511b5bc0d",
+    "CHANGELOG.md": "7d668b038670f2e214e332e6a22b4dc3e7acc51a16b6c1f334497dbe1db26ede",
     "assets/ads.meta": "0f2a5bdfb8fddf89bb0efabbdf508d49582c947056d8f85433ef15109a337e4a",
     "assets/ads/AdPolicy.ts": "f18e77fdaee662f5c3ea8a98b57abfbb4d76ad9b1bcea0a0ced213df55e3323e",
     "assets/ads/AdPolicy.ts.meta": "5423e2486ff601f6f9be728eabbaa4b8109903d866ca7cbed3d918e4d5af7617",
@@ -41,7 +41,7 @@
     "assets/debug.meta": "cfddc694abd52932ecdc370771685110a6ee39a557da18e298db208cb0987ad6",
     "assets/debug/GmPanel.ts": "b3693bdcb9af4533505697cb8eaccdad386c538c8f387f44a057e5e704c31e62",
     "assets/debug/GmPanel.ts.meta": "58ae5eaf0d1bbb91a4fec801c626bd761f53d9481244d57ac3d09bd4a7daa765",
-    "assets/index.ts": "6adc4b1374c6c69964851a3ee453fadbf702fb910846b503363836cfd76fb0e4",
+    "assets/index.ts": "e1152807ecd124d59e8af357b6b0bdda9fa0f3a9cb096ec2ce980d5acf9b51dc",
     "assets/index.ts.meta": "2651a2381786f88556adaa9c6fe4a0c25e263a26648066a6f233e56a21ec75e6",
     "assets/monitor.meta": "5246b8cc07c52b48092c3174ea45e47ff5dca9d421312f7956b4badd12007b9e",
     "assets/monitor/TrackUploader.ts": "25bd14b3a9d92a7c183c91748b736a09775ae09806732aa9dea1c1ae3f708d9d",
@@ -53,7 +53,7 @@
     "assets/monitor/track.ts": "292240ee60f4ef8b99592e677488ead9533aa973866db95b015349d5dc5009d4",
     "assets/monitor/track.ts.meta": "44b0270d238fb9f9d8e9f433192306f9afd940b1480c34e0653991e08b29a75d",
     "assets/net.meta": "2f4fd5239878f5ba009e4a18a28661622e64a4e40c949bee00344f35ef920c43",
-    "assets/net/AuthService.ts": "cd6cc0a1fad7bc73a3aa3b897e3b614eaa13cebb7433c61dcc5efab19bf6e4e1",
+    "assets/net/AuthService.ts": "d2fb8cf4211dfe9707ce30f4c99287141f61613ff6b2c08ac3a6800632997154",
     "assets/net/AuthService.ts.meta": "e098d038f41664aa255db3408221a68006ffd14aab7ed2f733fc0c796d7eb0c3",
     "assets/net/HttpClient.ts": "511cf1972df861e2cc5b87a6d22fc2c8ae62a17e5581257a3b5cf69ef72cfed1",
     "assets/net/HttpClient.ts.meta": "dda9f2392a32ba0345e0f9f5bd4f7ef3bcf29ef7fe8d2e73b9c36fc1aab74d3a",
@@ -93,7 +93,7 @@
     "assets/save.meta": "1f708ad35a06d33aee09bb2b80b2f740c04612e5a0ffc18a65939d535f8fe47e",
     "assets/save/KeyValueStore.ts": "559352c037a86390f50a2dd8f09513ce1e127612068c0ff9d40921f0b4857f3f",
     "assets/save/KeyValueStore.ts.meta": "fea7d3796cfef2fa178ce7a71257a22e29012a40dc084a82a507b8ac2ddbfd4a",
-    "assets/save/SaveStore.ts": "82c21a16fc0f65891b6eeb0dc0ab4fa5106ed7b7f80e6955b62bb6aa9e28958e",
+    "assets/save/SaveStore.ts": "853fa46efdb131a742f577a30bbbfea1c9433b5306f95901dc84ea7701eb39b2",
     "assets/save/SaveStore.ts.meta": "b775e8b04d80febf983f20fa6b512ce1ffd16275bf8ba4d7b47c5f51d9a1852f",
     "assets/time.meta": "b86151be49033f390da2845bf5ac6c0ea312f636c39531e40fe156198c724be8",
     "assets/time/ServerTime.ts": "0889219ad44298d000b2b5a5d9f13ae638682b42c4895cd6b58b86dbd9898822",
@@ -127,7 +127,7 @@
     "assets/ui/text.ts": "93d6b3d8db9bf532d1dbbe01fa2250249e1c204339f8fd50bf4837124d89d4a3",
     "assets/ui/text.ts.meta": "b4a7df1e67f7d6114ce19d02710912ac81f123cc1b0a203437192a54fab0b2a9",
     "assets/wiring.meta": "054a69941ec2680e388682f47fb937b8d1b9523e903c25092bc9f2c8e9858237",
-    "assets/wiring/auth.ts": "17496f6f866d651f44b11d12f3cab8fb09600f77870a154c034aed736420be0e",
+    "assets/wiring/auth.ts": "a0663fab12cbf5b152d1196bc917e4fe7784fa8ddd86c6f71a23f9eeccbbba97",
     "assets/wiring/auth.ts.meta": "61a09ea1b5cf2544a20d367cfa0111485c4d17c75a5383b3d2d06038cf2fba49",
     "assets/wiring/mocks.ts": "e9920c7d857d323d2e05cbee41fdf79d4b371fecc8a3dc8774688051c5ea3dc0",
     "assets/wiring/mocks.ts.meta": "632661dfbd4d9980b22e4974e0fddc1d73dabfd40ea125dd23a2333096e0c20c",
@@ -139,6 +139,6 @@
     "assets/wiring/sidebar.ts.meta": "94cd4e8126c0b6c20001b4ab02910ec3fe2049a909bcb82582e8b2259bba46c8",
     "assets/wiring/ui.ts": "766495f2c34ebcba214eb4c11ceee0b1ed7d51867284fd2cffa5ce9c268f8ffc",
     "assets/wiring/ui.ts.meta": "71d3eb9d0a3b0f241cbe86e9ecdfb9f438bc8ff1105d9ad3fc6fa2a16660ea37",
-    "package.json": "3f060470b2d78c89ee350e87458312b8dec3d61ba82e995f7e11065e1be72576"
+    "package.json": "b00181ac8b263c8db8687519b14b0096354ca242e7a6bc8427b905d20b42193c"
   }
 }

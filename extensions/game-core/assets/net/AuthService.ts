@@ -87,6 +87,11 @@ export class AuthService implements TokenProvider {
         return this.activeUser;
     }
 
+    /** 本设备从未登录成功时离线进入使用的游客身份 */
+    get guestId(): string {
+        return `guest-${this.options.deviceId()}`;
+    }
+
     /** 离线进入且尚未重新登录成功 */
     get offline(): boolean {
         return this.offlineEntry;
@@ -161,7 +166,7 @@ export class AuthService implements TokenProvider {
 
     private fallbackUser(err: unknown): string {
         const last = this.options.lastUser.get();
-        if ((this.options.fallback ?? 'guest') === 'guest') return last || `guest-${this.options.deviceId()}`;
+        if ((this.options.fallback ?? 'guest') === 'guest') return last || this.guestId;
         return last && isOfflineError(err) ? last : '';
     }
 

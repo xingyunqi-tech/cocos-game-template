@@ -12,6 +12,7 @@ import {
     platform,
     serverTime,
     setSaveUser,
+    userSave,
 } from './services';
 import { flushSidebarListeners } from './sidebar';
 
@@ -37,7 +38,10 @@ export const auth = new AuthService({
             deviceSave.flush();
         },
     },
-    onUser: (userId) => setSaveUser(userId),
+    onUser: (userId) => {
+        setSaveUser(userId);
+        if (userId !== auth.guestId && userSave.adoptScope(auth.guestId)) log.info('游客存档已并入登录账号');
+    },
     onWarn: (message, detail) => log.warn(message, detail),
     onServerTime: (serverMs, startedAt) => serverTime.sync(serverMs, startedAt),
     onRecovered: (userId) => userReady.emit({ userId, offline: false }),

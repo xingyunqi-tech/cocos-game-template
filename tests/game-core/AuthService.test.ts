@@ -184,6 +184,10 @@ describe('AuthService guest fallback', () => {
         expect(s.onUser).toHaveBeenCalledWith('guest-dev1');
     });
 
+    it('exposes the device guest identity', () => {
+        expect(setup({ fallback: 'guest' }).auth.guestId).toBe('guest-dev1');
+    });
+
     it('prefers the last user over the guest identity', async () => {
         const s = setup({ fallback: 'guest', lastUser: 'old', loginError: platformFailure });
         await expect(s.auth.login()).resolves.toEqual({ userId: 'old', offline: true });

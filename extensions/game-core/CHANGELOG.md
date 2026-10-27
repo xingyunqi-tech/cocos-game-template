@@ -1,5 +1,10 @@
 # game-core 变更记录
 
+## 1.2.1（2026-10-26）
+
+- `SaveStore.adoptScope(from)`：当前作用域没有存档时，把 `from` 作用域的存档移入当前作用域并删除来源；写入失败时撤销已复制的 key、保留来源
+- 登录成功时，若登录账号在本设备还没有存档，自动并入本设备游客身份（`guest-<设备 ID>`）的存档；`AuthService` 新增 `guestId`
+
 ## 1.2.0（2026-10-16）
 
 - `serverTime`：单调时钟改由平台提供（`IPlatform.monotonicNow()`，小游戏用 `getPerformance` 并自动判定毫秒或微秒）；平台不提供时 `calibrated` 为 false；新增 `synced` 表示已与服务器时间同步，HTTP `Date` 头只在未同步时用于校准。`ServerTimeOptions.monotonic` 可返回 null
