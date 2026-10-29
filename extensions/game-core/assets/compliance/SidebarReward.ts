@@ -1,3 +1,5 @@
+import { isRollback } from '../daily/date';
+
 export interface SidebarRewardStore {
     get(): { lastClaimDay: string };
     set(value: { lastClaimDay: string }): void;
@@ -19,12 +21,14 @@ function localDay(): string {
     return `${date.getFullYear()}-${month}-${day}`;
 }
 
-/** 从侧边栏进入时每天可领取一次 */
+/** 从侧边栏进入时每天可领取一次；日期回拨时视为已领取 */
 export class SidebarReward {
     constructor(private readonly options: SidebarRewardOptions) {}
 
     claimedToday(): boolean {
-        return this.options.store.get().lastClaimDay === this.today();
+        const last = this.options.store.get().lastClaimDay;
+        const today = this.today();
+        return last === today || isRollback(last, today);
     }
 
     canClaim(): boolean {

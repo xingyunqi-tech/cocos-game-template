@@ -35,7 +35,7 @@ npm run build -- web --debug && npm run smoke:web
 
 ## game-core 结构
 
-- 单例在 `wiring/services.ts`，功能装配按 `services → auth → sidebar → ui / remote → core.ts` 单向依赖，`wiring/` 下的模块不 import `core.ts`
+- 单例在 `wiring/services.ts`，功能装配按 `services → auth → sidebar → ui / remote / daily → core.ts` 单向依赖，`wiring/` 下的模块不 import `core.ts`
 - 业务可用的接口只从 `index.ts` 导出，业务类型扩展点只放 `augment.ts`；内部常量与装配函数不加入 `index.ts`
 - 启动步骤由 `core.ts` 按顺序调用注册函数，不在模块顶层注册
 - 新增 `.ts` 文件后执行一次构建（或用编辑器打开项目）生成 `.meta`，与源码一起提交

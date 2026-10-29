@@ -152,6 +152,14 @@ describe('SidebarReward', () => {
         expect(s.reward.claim()).toBe(true);
     });
 
+    it('counts a rolled back date as already claimed', () => {
+        const s = setup(true);
+        s.reward.claim();
+        s.setDay('2026-10-14');
+        expect(s.reward.claimedToday()).toBe(true);
+        expect(s.reward.claim()).toBe(false);
+    });
+
     it('uses the local date when no day source is given', () => {
         let saved = { lastClaimDay: '' };
         const reward = new SidebarReward({

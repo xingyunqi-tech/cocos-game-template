@@ -47,6 +47,8 @@ import { coreUi, defaultPrivacyPrompt, offlineBanner, privacy } from './wiring/u
 
 export * from './wiring/services';
 export { auth, onUserReady } from './wiring/auth';
+export { createDailyCounter, createDailyFlags, createLoginStreak, createWallet } from './wiring/daily';
+export type { WalletOptions } from './wiring/daily';
 export { fetchRemoteConfig } from './wiring/remote';
 export { onSidebarLaunch, sidebar, sidebarReward, simulateSidebarLaunch } from './wiring/sidebar';
 export { coreUi, createPrivacyPrompt, defaultPrivacyPrompt, privacy } from './wiring/ui';

@@ -1,4 +1,4 @@
-export const GAME_CORE_VERSION = '2.1.1-dev';
+export const GAME_CORE_VERSION = '2.2.0';
 
 export { GameRoot } from './boot/GameRoot';
 export { BootPipeline, BootStepError } from './boot/BootPipeline';
@@ -27,6 +27,10 @@ export {
     coreOptions,
     coreText,
     coreUi,
+    createDailyCounter,
+    createDailyFlags,
+    createLoginStreak,
+    createWallet,
     defaultPrivacyPrompt,
     getDesignInset,
     healthNotice,
@@ -59,7 +63,17 @@ export type {
     GameEntry,
     PrivacyPromptText,
     SettingsProvider,
+    WalletOptions,
 } from './core';
+export { DailyCounter } from './daily/DailyCounter';
+export type { DailyCounterData, DailyStoreOptions } from './daily/DailyCounter';
+export { DailyFlags } from './daily/DailyFlags';
+export type { DailyFlagsData } from './daily/DailyFlags';
+export { LoginStreak } from './daily/LoginStreak';
+export type { LoginStreakData, LoginStreakResult } from './daily/LoginStreak';
+export { Wallet } from './daily/Wallet';
+export type { WalletData, WalletListener } from './daily/Wallet';
+export { dayNumber, isRollback, ROLLBACK_TOLERANCE_DAYS } from './daily/date';
 export { createLogger, logHub } from './monitor/logger';
 export type { LogLevel, LogRecord, LogSink, Logger } from './monitor/logger';
 export { track, tracker } from './monitor/track';

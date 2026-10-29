@@ -1,5 +1,15 @@
 # game-core 变更记录
 
+## 2.2.0（2026-10-29）
+
+- `DailyCounter` / `createDailyCounter(key)`：按天计数与上限（`uses`、`remaining`、`record`、`tryUse`），跨天清零，日期回拨时沿用已记录的计数
+- `DailyFlags` / `createDailyFlags(key)`：每天一次的标记（`canClaim`、`claim`），日期回拨时不能领取，领取时清除过期记录
+- `LoginStreak` / `createLoginStreak(key, cycleDays)`：连续登录天数与周期完成判断
+- `Wallet` / `createWallet(key, { defaults, version?, migrations? })`：货币与道具数量（`get`、`add`、`spend`、`exchange`、`onChange`），拒绝负数、NaN 与无穷大
+- 工厂按 `serverTime.today()` 计算日期，数据存在 `userSave`，用户就绪（`onUserReady`）前只读；`DailyCounter` 的存档格式为 `{ date, counts }`
+- `dayNumber`、`isRollback`、`ROLLBACK_TOLERANCE_DAYS`：记录日期比今天晚 1 到 2 天视为日期回拨，更晚视为错误日期
+- `sidebarReward`：日期回拨时视为今天已领取
+
 ## 2.1.0（2026-10-29）
 
 - token 主动刷新：会话剩余有效期小于 `refreshAheadMs`（默认 60 秒，可用 `auth.configure` 设置，`0` 关闭）与有效期一半中的较小值时，下一个需要鉴权的请求先刷新 token 再发送（带 `skipRefresh` 的请求除外）；主动刷新失败时保留会话，30 秒内不再主动刷新。`TokenProvider` 新增可选的 `shouldRefresh()`，`refresh` 接受可选参数 `'expiring' | 'expired'`

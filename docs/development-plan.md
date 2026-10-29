@@ -137,7 +137,7 @@ cocos-game-template/
 
 - `game-core` 每次发版打 tag（`core-vX.Y.Z`）并更新 CHANGELOG，破坏性变更升主版本并附迁移说明
 - 下游执行 `scripts/update-core.sh <version>` 替换 `extensions/game-core/`，项目侧资源变更按 CHANGELOG 手工合入
-- `npm run check:plugins` 校验 `oops-plugin-framework` 与 `game-core` 未被本地修改；`game-core` 的锁定快照随版本生成并分发（当前锁定 2.1.0；版本号为 `-dev` 时只提示差异）
+- `npm run check:plugins` 校验 `oops-plugin-framework` 与 `game-core` 未被本地修改；`game-core` 的锁定快照随版本生成并分发（当前锁定 2.2.0；版本号为 `-dev` 时只提示差异）
 
 ## 4. game-core 模块设计
 
@@ -472,6 +472,7 @@ interface ISidebar {                 // 抖音必接
 | 12 工程脚本 | 发布构建自动切换 prod 环境并还原；冒烟拆分为通用检查与 `smoke-game.mjs` 游戏钩子、静态服务只监听本机；配置表生成原子化与 `tables --check`；update-core 失败回滚；脚本类型检查、`.mts` lint、CI 固定 Node | 开发 | 已完成；verify、Web 发布构建与冒烟通过；子 agent 代码评审问题已修复；发布为 game-core 1.2.3 |
 | 13 扩展性重构 | `configureCore` 注入平台、存储、传输层；登录协议适配钩子；`http.onError` 多监听；启动重试跳过已成功步骤；`coreText` 文案与 `coreUi.setSettings` / `setDocument`；类型扩展点 `db://game-core/augment`；收窄公开入口并禁止业务深层引用；侧边栏改订阅 `onUserReady` | 开发 | 已完成；verify、Web 冒烟通过；子 agent 代码评审问题已修复；parking-game 副本按迁移说明演练升级通过（verify、Web 冒烟）；发布为 game-core 2.0.0 |
 | 14 能力增强 | token 到期前主动刷新；激励视频预加载；广告展示期间暂停背景音乐；`privacy.require()` 主动触发隐私授权 | 开发 | 已完成；verify、Web 冒烟通过；子 agent 代码评审问题已修复；微信隐私授权与广告预加载待批次 7 真机确认；发布为 game-core 2.1.0 |
+| 15 通用玩法逻辑 | 从 parking-game 提炼：`DailyCounter` 按天计数、`DailyFlags` 每日一次、`LoginStreak` 连续登录、`Wallet` 货币道具，按服务器日期、日期回拨防护、用户就绪前只读 | 开发 | 已完成；verify、Web 冒烟通过；子 agent 代码评审问题已修复；parking-game 副本以 `createDailyCounter` 替换广告计数（存档兼容）后 verify 与 Web 冒烟通过；发布为 game-core 2.2.0 |
 
 批次 3 中不依赖引擎的部分（HttpClient、存档迁移、频控）可在 S0 结束后与批次 2 并行；批次 7 审核等待期间可并行批次 8 中不依赖审核结果的任务。
 

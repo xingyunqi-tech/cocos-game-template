@@ -111,6 +111,40 @@ bootPipeline.register(
 
 `serverTime.now()`、`serverTime.today()`（默认东八区自然日）以服务器时间为准：登录响应的 `serverTime`（毫秒）与 HTTP 响应头 `Date` 自动校准。单调时钟由平台提供（Web 用 `performance.now`，小游戏用 `wx.getPerformance` / `tt.getPerformance`，启动时自动判定毫秒或微秒），校准后按单调时钟推算，修改系统时间不影响，`serverTime.calibrated` 为 true。未校准（离线进入或服务端未返回 `serverTime`）时使用本机时间；平台不提供单调时钟时按服务器偏移修正本机时间，两种情况 `calibrated` 都为 false，修改系统时间可以影响结果，奖励价值高时可在 `calibrated` 为 false 时不发放。按天发放的奖励（如 `sidebarReward`）使用 `serverTime.today()`。Web 跨域请求读取 `Date` 头需要服务端设置 `Access-Control-Expose-Headers: Date`。
 
+## 8.1 每日计数、签到与钱包
+
+按服务器日期（`serverTime.today()`）计算，数据存在用户存档；工厂在模块顶层各调用一次，参数为 userSave 的 slot key。用户就绪（`onUserReady`）前只读：计数视为已用完、领取与签到不生效、钱包不能修改。
+
+```ts
+const wallet = createWallet<'coins' | 'hint'>('wallet', { defaults: () => ({ coins: 0, hint: 2 }) });
+const adLimits = createDailyCounter('adCounters');
+const daily = createDailyFlags('dailyFlags');
+const login = createLoginStreak('loginStreak', 7);
+
+onUserReady(() => {
+    const { counted, day, cycleComplete } = login.record();
+    if (cycleComplete) wallet.add('coins', 200);
+});
+
+function onWin(bonus: number) {
+    if (daily.claim('firstWin')) wallet.add('coins', bonus);
+}
+
+async function revive(levelId: number) {
+    if (adLimits.tryUse(`revive:${levelId}`, 1)) await ads.showRewarded('revive');
+}
+
+wallet.exchange('coins', 100, 'hint');
+wallet.onChange((key, amount) => refreshLabel(key, amount));
+```
+
+- 记录日期比今天晚 1 到 2 天（`ROLLBACK_TOLERANCE_DAYS`）视为日期回拨，更晚视为错误日期（如离线时本机时钟拨快）并按新的一天处理
+- `DailyCounter`：跨天清零；日期回拨时沿用已记录的计数，不能借回拨重复使用；`record` 的次数须为正整数
+- `DailyFlags`：每天一次；日期回拨时不能领取；领取时清除早于回拨范围的记录
+- `LoginStreak`：断签从第 1 天重新计，满一个周期后下次从第 1 天开始；同一天重复记录或日期回拨不计
+- `Wallet`：`add` 只接受有限非负数，`spend` / `exchange` 数量不足或参数无效时返回 false 且不变；`createWallet` 可传 `version`、`migrations`
+- 广告位名称、次数上限、道具价格等数值由游戏定义；纯逻辑测试可直接构造 `DailyCounter` 等类并传入内存存储与日期函数
+
 ## 9. 横屏游戏
 
 1. `settings/v2/packages/project.json` 的 `designResolution` 改为 `1280 × 720`，`fitHeight: true`、`fitWidth: false`

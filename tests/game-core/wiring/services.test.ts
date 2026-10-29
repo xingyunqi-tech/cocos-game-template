@@ -234,3 +234,40 @@ describe('ads and background music', () => {
         expect(audio.log).toEqual([]);
     });
 });
+
+describe('daily factories', () => {
+    it('persists counters, flags, streaks and wallets in the user save', async () => {
+        let ready = false;
+        vi.doMock('db://game-core/wiring/auth', () => ({ isUserReady: () => ready }));
+        const { createDailyCounter, createDailyFlags, createLoginStreak, createWallet } =
+            await import('db://game-core/wiring/daily');
+        const { userSave } = services;
+        const saved = new Map<string, string>();
+        useStore({
+            getItem: (key) => saved.get(key) ?? null,
+            setItem: (key, value) => void saved.set(key, value),
+            removeItem: (key) => void saved.delete(key),
+        });
+        userSave.setScope('player');
+        const counter = createDailyCounter('test-ads');
+        const flags = createDailyFlags('test-flags');
+        const streak = createLoginStreak('test-streak', 7);
+        const wallet = createWallet<'coins'>('test-wallet', { defaults: () => ({ coins: 10 }) });
+        expect(counter.tryUse('revive', 1)).toBe(false);
+        expect(flags.claim('firstWin')).toBe(false);
+        expect(streak.record().counted).toBe(false);
+        expect(wallet.spend('coins', 4)).toBe(false);
+        expect(() => wallet.add('coins', 1)).toThrow('用户存档未就绪');
+        ready = true;
+        expect(counter.tryUse('revive', 1)).toBe(true);
+        expect(flags.claim('firstWin')).toBe(true);
+        expect(streak.record().day).toBe(1);
+        expect(wallet.spend('coins', 4)).toBe(true);
+        userSave.flush();
+        const stored = (key: string) => JSON.parse(saved.get(`gc:u:player:${key}`) ?? 'null') as { d: unknown };
+        expect(stored('test-ads').d).toMatchObject({ counts: { revive: 1 } });
+        expect(stored('test-flags').d).toEqual({ firstWin: services.serverTime.today() });
+        expect(stored('test-streak').d).toMatchObject({ streak: 1 });
+        expect(stored('test-wallet').d).toEqual({ coins: 6 });
+    });
+});
