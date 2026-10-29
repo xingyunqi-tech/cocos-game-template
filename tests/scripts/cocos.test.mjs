@@ -1,5 +1,8 @@
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { judgeBuild, resolveBuildConfig, runBuild } from '../../scripts/lib/cocos.mjs';
+import { judgeBuild, recoverGameEnv, resolveBuildConfig, runBuild, useGameEnv } from '../../scripts/lib/cocos.mjs';
 
 const NOISE = [
     '10-15-2026 03:32:25 - debug: Error: Exit process with code:null, signal:SIGTERM in task build-script',
@@ -72,5 +75,52 @@ describe('runBuild', () => {
             if (saved === undefined) delete process.env.DOUYIN_APPID;
             else process.env.DOUYIN_APPID = saved;
         }
+    });
+});
+
+describe('useGameEnv', () => {
+    const original = '{\n  "gui": [{ "type": "Game" }],\n  "type": "dev",\n  "config": { "dev": {}, "prod": {} }\n}\n';
+    const files = () => {
+        const dir = mkdtempSync(join(tmpdir(), 'game-env-'));
+        const path = join(dir, 'config.json');
+        writeFileSync(path, original);
+        return { path, backup: join(dir, 'backup', 'config.json') };
+    };
+
+    it('switches only the top-level environment and restores the original text once', async () => {
+        const { path, backup } = files();
+        const restore = await useGameEnv('prod', path, backup);
+        const switched = JSON.parse(readFileSync(path, 'utf8'));
+        expect(switched.type).toBe('prod');
+        expect(switched.gui[0].type).toBe('Game');
+        expect(readFileSync(backup, 'utf8')).toBe(original);
+        await Promise.all([restore(), restore()]);
+        expect(readFileSync(path, 'utf8')).toBe(original);
+        expect(existsSync(backup)).toBe(false);
+    });
+
+    it('leaves the file untouched without a type or with the current type', async () => {
+        const { path, backup } = files();
+        await (
+            await useGameEnv(null, path, backup)
+        )();
+        await (
+            await useGameEnv('dev', path, backup)
+        )();
+        expect(readFileSync(path, 'utf8')).toBe(original);
+    });
+
+    it('rejects an environment missing from the config', async () => {
+        const { path, backup } = files();
+        await expect(useGameEnv('test', path, backup)).rejects.toThrow('config.json 没有环境 test');
+        await expect(useGameEnv('', path, backup)).rejects.toThrow('config.json 没有环境 ');
+    });
+
+    it('recovers the original config left switched by a killed build', async () => {
+        const { path, backup } = files();
+        await useGameEnv('prod', path, backup);
+        await expect(recoverGameEnv(path, backup)).resolves.toBe(true);
+        expect(readFileSync(path, 'utf8')).toBe(original);
+        await expect(recoverGameEnv(path, backup)).resolves.toBe(false);
     });
 });

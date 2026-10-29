@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createWriteStream, existsSync, readFileSync, statSync } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -96,7 +96,41 @@ export function resolveBuildConfig(platform, env = process.env) {
     return { config, placeholder: !value };
 }
 
-export async function runBuild(platform, { debug = false, allowPlaceholderAppid = false, logFile } = {}) {
+export const GAME_CONFIG = join(ROOT, 'assets', 'resources', 'config.json');
+
+const ENV_BACKUP = join(ROOT, 'temp', 'build-env', 'config.json');
+
+/** 上次构建被强制结束、没有还原 config.json 时，用备份还原；返回是否还原 */
+export async function recoverGameEnv(file = GAME_CONFIG, backup = ENV_BACKUP) {
+    if (!existsSync(backup)) return false;
+    await writeFile(file, await readFile(backup, 'utf8'));
+    await rm(backup, { force: true });
+    return true;
+}
+
+/** 把 config.json 的环境切到 type，返回只执行一次的还原函数；type 为 null 或与当前相同时不改 */
+export async function useGameEnv(type, file = GAME_CONFIG, backup = ENV_BACKUP) {
+    if (type === null || type === undefined) return async () => {};
+    const original = await readFile(file, 'utf8');
+    const config = JSON.parse(original);
+    if (!config.config?.[type]) throw new Error(`config.json 没有环境 ${type}`);
+    if (config.type === type) return async () => {};
+    await mkdir(dirname(backup), { recursive: true });
+    await writeFile(backup, original);
+    await writeFile(file, `${JSON.stringify({ ...config, type }, null, 2)}\n`);
+    let restoring = null;
+    return () => {
+        restoring ??= writeFile(file, original).then(() => rm(backup, { force: true }));
+        return restoring;
+    };
+}
+
+/**
+ * env 缺省时发布构建使用 prod，调试构建使用 config.json 当前环境
+ * @param {string} platform
+ * @param {{ debug?: boolean, allowPlaceholderAppid?: boolean, logFile: string, env?: string }} options
+ */
+export async function runBuild(platform, { debug = false, allowPlaceholderAppid = false, logFile, env }) {
     const target = PLATFORMS[platform];
     const { config, placeholder } = resolveBuildConfig(platform);
     if (placeholder) {
@@ -110,20 +144,38 @@ export async function runBuild(platform, { debug = false, allowPlaceholderAppid 
     await mkdir(dirname(configPath), { recursive: true });
     await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
     const options = [`platform=${target}`, `debug=${debug}`, `configPath=${configPath}`];
+    if (await recoverGameEnv()) console.warn('! 上次构建未还原 config.json，已从备份还原');
+    const restore = await useGameEnv(env ?? (debug ? null : 'prod'));
     await mkdir(dirname(logFile), { recursive: true });
     const out = createWriteStream(logFile);
     let log = '';
-    const exitCode = await new Promise((done, fail) => {
-        const child = spawn(creatorExecutable(), ['--project', ROOT, '--build', options.join(';')]);
-        const collect = (chunk) => {
-            log += chunk;
-            out.write(chunk);
-        };
-        child.stdout.on('data', collect);
-        child.stderr.on('data', collect);
-        child.on('error', fail);
-        child.on('close', done);
-    });
-    out.end();
+    let child;
+    const interrupt = async (signal) => {
+        child?.kill(signal);
+        await restore();
+        process.exit(130);
+    };
+    const signals = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+    for (const signal of signals) process.once(signal, interrupt);
+    let exitCode;
+    try {
+        exitCode = await new Promise((done, fail) => {
+            child = spawn(creatorExecutable(), ['--project', ROOT, '--build', options.join(';')]);
+            const collect = (chunk) => {
+                log += chunk;
+                out.write(chunk);
+            };
+            child.stdout.setEncoding('utf8');
+            child.stderr.setEncoding('utf8');
+            child.stdout.on('data', collect);
+            child.stderr.on('data', collect);
+            child.on('error', fail);
+            child.on('close', done);
+        });
+    } finally {
+        for (const signal of signals) process.off(signal, interrupt);
+        await new Promise((done) => out.end(done));
+        await restore();
+    }
     return { ...judgeBuild(exitCode, log), outputDir: join(ROOT, 'build', target) };
 }

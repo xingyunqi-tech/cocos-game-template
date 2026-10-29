@@ -1,9 +1,9 @@
 {
   "plugin": "game-core",
-  "version": "1.2.2",
-  "source": "core-v1.2.2",
+  "version": "1.2.3",
+  "source": "core-v1.2.3",
   "files": {
-    "CHANGELOG.md": "e3719c5f46a8674988b5dafca6f4ae6d6cd36e1ee4ef8474709cfd1953899da7",
+    "CHANGELOG.md": "630341af4b67839b1aff5615897ecf07d40803827b507c891f8999d18292e729",
     "assets/ads.meta": "0f2a5bdfb8fddf89bb0efabbdf508d49582c947056d8f85433ef15109a337e4a",
     "assets/ads/AdPolicy.ts": "f18e77fdaee662f5c3ea8a98b57abfbb4d76ad9b1bcea0a0ced213df55e3323e",
     "assets/ads/AdPolicy.ts.meta": "5423e2486ff601f6f9be728eabbaa4b8109903d866ca7cbed3d918e4d5af7617",
@@ -41,7 +41,7 @@
     "assets/debug.meta": "cfddc694abd52932ecdc370771685110a6ee39a557da18e298db208cb0987ad6",
     "assets/debug/GmPanel.ts": "b3693bdcb9af4533505697cb8eaccdad386c538c8f387f44a057e5e704c31e62",
     "assets/debug/GmPanel.ts.meta": "58ae5eaf0d1bbb91a4fec801c626bd761f53d9481244d57ac3d09bd4a7daa765",
-    "assets/index.ts": "4c4ba8e2633bd9078b6d5de34b623f7933ba11aa3226c1795287a79b02085cf3",
+    "assets/index.ts": "9a7a3d4c3fbe6f64e58282542cf253e843997d8df40d926eb5971ab9ba77c27a",
     "assets/index.ts.meta": "2651a2381786f88556adaa9c6fe4a0c25e263a26648066a6f233e56a21ec75e6",
     "assets/monitor.meta": "5246b8cc07c52b48092c3174ea45e47ff5dca9d421312f7956b4badd12007b9e",
     "assets/monitor/TrackUploader.ts": "25bd14b3a9d92a7c183c91748b736a09775ae09806732aa9dea1c1ae3f708d9d",
@@ -139,6 +139,6 @@
     "assets/wiring/sidebar.ts.meta": "94cd4e8126c0b6c20001b4ab02910ec3fe2049a909bcb82582e8b2259bba46c8",
     "assets/wiring/ui.ts": "766495f2c34ebcba214eb4c11ceee0b1ed7d51867284fd2cffa5ce9c268f8ffc",
     "assets/wiring/ui.ts.meta": "71d3eb9d0a3b0f241cbe86e9ecdfb9f438bc8ff1105d9ad3fc6fa2a16660ea37",
-    "package.json": "d3d45aa2bd9dececfa71125da195ea3045774a4d6e5725ad24d1a83e8f7771e7"
+    "package.json": "11bec5d0ad88755eccbbe4a8707b76e9a455ec8a10225887d925a841c2ff13f0"
   }
 }

@@ -1,9 +1,4 @@
 extensions/oops-plugin-framework/
-library/
-temp/
-local/
-build/
-profiles/
 settings/
 assets/**/*.scene
 assets/**/*.prefab

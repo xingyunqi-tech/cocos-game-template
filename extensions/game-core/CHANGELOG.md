@@ -1,5 +1,20 @@
 # game-core 变更记录
 
+## 1.2.3（2026-10-28）
+
+game-core 代码无变更，本版本只有构建脚本与工程配置，需按下列条目从模板仓库手工合入。
+
+### 构建
+
+- `scripts/lib/cocos.mjs`、`scripts/build.mjs`：发布构建自动把 `config.json` 切到 `prod`，构建结束（含中断）后还原，构建被强制结束时下次构建从 `temp/build-env/` 的备份还原；`--env dev|test|prod` 指定环境；构建日志按 UTF-8 收集并在退出前写完
+- `scripts/smoke-web.mjs`：只做通用检查，游戏相关检查移到 `scripts/smoke-game.mjs`（默认导出 `smokeGame(ctx)`，可替换或删除）；协议页只检查有内容；远程配置检查只在 `httpMock` 且 `remoteConfigPath` 非空时进行；静态服务只监听 127.0.0.1，拒绝目录外路径与非法 URL 编码
+- `scripts/tables.mjs`、`scripts/lib/tables.mjs`：全部表转换与类型生成成功后才写文件；过期表在新文件写入后删除；`npm run tables -- --check` 只比对生成物与 Excel，不一致时失败
+- `scripts/update-core.mjs`：替换插件目录失败时恢复原目录；上次升级中断留下 `extensions/game-core.old` 且插件目录缺失时先恢复
+- `package.json`：`verify` 增加 `npm run tables -- --check`；`typecheck` 增加 `tsc -p tsconfig.scripts.json`（新增文件，检查 `scripts/` 与根目录脚本）；`@eslint/js`、`globals` 改为精确版本
+- `eslint.config.mjs`：检查 `.mts` 文件；`scripts/smoke-game.mjs` 使用浏览器全局变量
+- `.github/workflows/ci.yml`：build job 用 `actions/setup-node` 固定 Node 22
+- `.prettierignore`：去掉与 `.gitignore` 重复的条目
+
 ## 1.2.2（2026-10-28）
 
 - `SaveStore`：缺少迁移步骤或迁移抛错时读到默认值且不写入，原存档保留；存档无法解析时原文备份到 `<前缀>:__bak:<作用域>:<key>` 后允许写入；`set()` 前未读取过的 slot 先按读取规则判断能否写入

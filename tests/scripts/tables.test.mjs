@@ -1,7 +1,9 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import ExcelJS from 'exceljs';
 import { describe, expect, it } from 'vitest';
-import { convertSheet, readWorkbookTables, renderTypes } from '../../scripts/lib/tables.mjs';
+import { convertSheet, planTables, readWorkbookTables, renderTypes } from '../../scripts/lib/tables.mjs';
 
 const HEADER = [
     ['id', 'name', 'price', 'on', 'tags', 'extra', '#memo'],
@@ -100,9 +102,39 @@ describe('cell values', () => {
 });
 
 describe('xlsx reading', () => {
-    it('reads the sample workbook through readWorkbookTables', async () => {
-        const tables = await readWorkbookTables(join(import.meta.dirname, '../../config-tables/demo.xlsx'), ExcelJS);
-        expect(tables.map((t) => t.name)).toEqual(['demo_level']);
-        expect(tables[0].records[1]).toMatchObject({ id: 1, duration: 20, tags: ['新手', '默认'] });
+    it('reads typed rows and skips # sheets through readWorkbookTables', async () => {
+        const workbook = new ExcelJS.Workbook();
+        workbook.addWorksheet('level').addRows([
+            ['id', 'name', 'tags'],
+            ['int', 'string', 'string[]'],
+            ['编号', '名称', '标签'],
+            [1, '入门', '新手,默认'],
+        ]);
+        workbook.addWorksheet('#draft').addRows([['id'], ['int']]);
+        const file = join(mkdtempSync(join(tmpdir(), 'tables-')), 'sample.xlsx');
+        await workbook.xlsx.writeFile(file);
+        const tables = await readWorkbookTables(file, ExcelJS);
+        expect(tables.map((t) => t.name)).toEqual(['level']);
+        expect(tables[0].records[1]).toEqual({ id: 1, name: '入门', tags: ['新手', '默认'] });
+    });
+});
+
+describe('planTables', () => {
+    const table = (name) => convertSheet(name, [['id'], ['int'], [''], [1]]);
+    const options = {
+        jsonDir: '/j',
+        typesFile: '/t/TableTypes.ts',
+        existingJson: ['a.json', 'old.json', 'old.json.meta'],
+    };
+
+    it('plans json and type outputs and lists stale json files', () => {
+        const plan = planTables([table('a')], options);
+        expect(plan.writes.map((w) => w.path)).toEqual(['/j/a.json', '/t/TableTypes.ts']);
+        expect(plan.stale).toEqual(['/j/old.json']);
+    });
+
+    it('throws before any output for duplicate names or type name clashes', () => {
+        expect(() => planTables([table('a'), table('a')], options)).toThrow('表名 a 重复');
+        expect(() => planTables([table('a_b'), table('aB')], options)).toThrow('类型名 ABRow 冲突');
     });
 });

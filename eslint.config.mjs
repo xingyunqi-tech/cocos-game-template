@@ -31,7 +31,12 @@ export default tseslint.config(
         languageOptions: { globals: globals.node },
     },
     {
-        files: ['scripts/smoke-web.mjs'],
+        files: ['**/*.mts'],
+        extends: [js.configs.recommended, ...tseslint.configs.recommended],
+        languageOptions: { globals: globals.node },
+    },
+    {
+        files: ['scripts/smoke-web.mjs', 'scripts/smoke-game.mjs'],
         languageOptions: { globals: globals.browser },
     },
     {

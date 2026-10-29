@@ -66,7 +66,13 @@ function main() {
         );
         process.exit(1);
     }
-    const before = readVersion(ROOT) ?? '';
+    const target = join(ROOT, CORE_DIR);
+    const old = `${target}.old`;
+    if (!existsSync(target) && existsSync(old)) {
+        renameSync(old, target);
+        console.log(`! 已从 ${CORE_DIR}.old 恢复上次未完成升级前的 game-core`);
+    }
+    const before = readVersion(ROOT);
     if (before && compareVersions(version, before) < 0 && !values['allow-downgrade']) {
         console.error(`✗ 目标版本 ${version} 低于当前 ${before}，确认降级请加 --allow-downgrade`);
         process.exit(1);
@@ -102,14 +108,19 @@ function main() {
         const fetched = readVersion(work);
         if (fetched !== version) throw new Error(`${tag} 中 game-core 版本为 ${fetched}，与 ${version} 不一致`);
         if (!existsSync(join(work, LOCK_FILE))) throw new Error(`${tag} 中缺少 ${LOCK_FILE}`);
-        const target = join(ROOT, CORE_DIR);
         const staged = `${target}.next`;
-        const old = `${target}.old`;
         rmSync(staged, { recursive: true, force: true });
         rmSync(old, { recursive: true, force: true });
         cpSync(join(work, CORE_DIR), staged, { recursive: true });
-        if (existsSync(target)) renameSync(target, old);
-        renameSync(staged, target);
+        const hadTarget = existsSync(target);
+        if (hadTarget) renameSync(target, old);
+        try {
+            renameSync(staged, target);
+        } catch (err) {
+            if (hadTarget) renameSync(old, target);
+            rmSync(staged, { recursive: true, force: true });
+            throw err;
+        }
         rmSync(old, { recursive: true, force: true });
         cpSync(join(work, LOCK_FILE), join(ROOT, LOCK_FILE));
         console.log(`✓ game-core ${before || '（无）'} → ${version}`);

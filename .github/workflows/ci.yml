@@ -29,6 +29,10 @@ jobs:
       DOUYIN_APPID: ${{ secrets.DOUYIN_APPID }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
       - run: npm ci
       - name: Web 冒烟
         run: npm run build -- web --debug && npm run smoke:web -- --screenshot temp/smoke.png

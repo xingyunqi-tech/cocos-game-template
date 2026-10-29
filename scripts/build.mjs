@@ -8,8 +8,14 @@ const { values, positionals } = parseArgs({
     options: {
         debug: { type: 'boolean', default: false },
         'allow-placeholder-appid': { type: 'boolean', default: false },
+        env: { type: 'string' },
     },
 });
+
+if (values.env === '') {
+    console.error('✗ --env 不能为空，可选 dev / test / prod');
+    process.exit(1);
+}
 
 loadLocalEnv();
 
@@ -24,6 +30,7 @@ for (const platform of platforms) {
             debug: values.debug,
             allowPlaceholderAppid: values['allow-placeholder-appid'],
             logFile,
+            env: values.env,
         });
     } catch (err) {
         failed = true;

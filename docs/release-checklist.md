@@ -5,7 +5,7 @@
 ## 1. 构建与包体
 
 - [ ] `.env.local` 已填写正式 `WECHAT_APPID`、`DOUYIN_APPID`，发布构建未使用 `--allow-placeholder-appid`
-- [ ] `assets/resources/config.json` 的 `type` 为 `prod`，`httpMock` 为 `false`，`loginFallback` 符合产品要求；构建后在体验版确认环境（服务器地址）正确
+- [ ] 发布构建（不带 `--debug`）自动使用 `config.json` 的 `prod` 环境，构建结束后还原；确认 prod 的 `httpMock` 为 `false`、`loginFallback` 符合产品要求；构建后在体验版确认环境（服务器地址）正确
 - [ ] prod 环境的 `remoteConfigPath`、`trackPath` 已填正式接口或确认留空
 - [ ] `npm run verify` 通过
 - [ ] `npm run build:wechat`、`npm run build:douyin` 成功，包体检查通过（主包 ≤ 4MB；微信总包 ≤ 30MB；抖音总包 ≤ 20MB，开通虚拟支付后改 `scripts/size-limits.json` 为 30MB）

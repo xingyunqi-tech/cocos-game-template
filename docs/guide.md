@@ -148,9 +148,14 @@ bootPipeline.register(
 
 ## 13. 删除示例游戏
 
+新项目先把 `package.json` 的 `uuid` 换成新值（`node -e "console.log(crypto.randomUUID())"`），避免与模板及其他项目重复。
+
 1. 删除 `assets/game/`、`assets/game.meta`、`assets/bundles/demo/`、`assets/bundles/demo.meta`（`TableTypes.ts` 一并删除，重新执行 `npm run tables` 会再生成）
 2. 按需删除 `config-tables/demo.xlsx` 并重新执行 `npm run tables`
 3. `npm run build -- web --debug && npm run smoke:web -- --skip-demo`
+4. 写好自己的游戏入口后，把 `scripts/smoke-game.mjs` 改为本游戏的冒烟检查（或删除该文件只做通用检查），之后执行 `npm run smoke:web`
+
+`smoke:web` 先做通用检查（启动、网络、存档、平台、通用 UI、GM），再调用 `scripts/smoke-game.mjs` 的默认导出 `smokeGame({ browser, page, origin, checks, pageErrors, consoleLines, timeout })`：在 `checks` 中追加通过项，抛错即失败。模板的 `smoke-game.mjs` 含"启动步骤失败时显示重试"的检查（拦截示例 Bundle 使启动失败），替换时建议改为拦截本游戏的某个启动资源保留这项检查。`--skip-demo` 不调用该文件，并检查未注册游戏入口时启动正常。
 
 ## 14. 监控
 

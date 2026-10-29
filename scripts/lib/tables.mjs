@@ -1,4 +1,4 @@
-import { basename } from 'node:path';
+import { basename, extname, join } from 'node:path';
 
 export const FIELD_TYPES = {
     int: 'number',
@@ -161,4 +161,23 @@ export async function readWorkbookTables(file, ExcelJS) {
         }
     }
     return tables;
+}
+
+/** 由全部表计算输出：JSON 文件内容、类型文件内容、需删除的过期 JSON；表名重复或类型名冲突时抛错，不写任何文件 */
+export function planTables(tables, { jsonDir, typesFile, existingJson }) {
+    const names = new Set();
+    for (const table of tables) {
+        if (names.has(table.name)) throw new Error(`表名 ${table.name} 重复`);
+        names.add(table.name);
+    }
+    const types = renderTypes(tables);
+    const writes = tables.map((table) => ({
+        name: table.name,
+        rows: Object.keys(table.records).length,
+        path: join(jsonDir, `${table.name}.json`),
+        content: `${JSON.stringify(table.records, null, 2)}\n`,
+    }));
+    writes.push({ path: typesFile, content: types });
+    const stale = existingJson.filter((file) => extname(file) === '.json' && !names.has(basename(file, '.json')));
+    return { writes, stale: stale.map((file) => join(jsonDir, file)) };
 }

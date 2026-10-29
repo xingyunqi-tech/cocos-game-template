@@ -137,7 +137,7 @@ cocos-game-template/
 
 - `game-core` 每次发版打 tag（`core-vX.Y.Z`）并更新 CHANGELOG，破坏性变更升主版本并附迁移说明
 - 下游执行 `scripts/update-core.sh <version>` 替换 `extensions/game-core/`，项目侧资源变更按 CHANGELOG 手工合入
-- `npm run check:plugins` 校验 `oops-plugin-framework` 与 `game-core` 未被本地修改；`game-core` 的锁定快照随版本生成并分发（当前锁定 1.2.2；版本号为 `-dev` 时只提示差异）
+- `npm run check:plugins` 校验 `oops-plugin-framework` 与 `game-core` 未被本地修改；`game-core` 的锁定快照随版本生成并分发（当前锁定 1.2.3；版本号为 `-dev` 时只提示差异）
 
 ## 4. game-core 模块设计
 
@@ -469,6 +469,7 @@ interface ISidebar {                 // 抖音必接
 
 | 10 代码审查优化 | A 数据正确性（小游戏单调时钟、新版本存档保护、slot 重名）；B 竞态与平台适配（音乐竞态、录屏启动中停止、请求头大小写、平台登录超时）；C 埋点退避与鉴权循环；D 启动锚点执行时解析、业务入口失败重试；E 远程配置扩展、`onUserReady`、`releaseBundle`、SafeTopAdapter 纵向 Widget；F 拆分 `core.ts` 为 `wiring/` | 开发 | 已完成（`49ba84e`、`ad00ef2`、`d1e9130`、`75f592b`、`267a4b8`、`7361185`）；verify、Web 冒烟通过；涉及平台行为的项待批次 7 真机确认；发布为 game-core 1.2.0 |
 | 11 正确性修复 | 存档无法迁移时不写入、损坏存档备份；音乐开关恢复当前背景音乐；广告展示超时；抖音录屏重复停止与超时；登录与 token 刷新的并发、取消、退出登录；侧边栏登录前热启动回调 | 开发 | 已完成；verify、Web 冒烟通过；子 agent 代码评审问题已修复；发布为 game-core 1.2.2 |
+| 12 工程脚本 | 发布构建自动切换 prod 环境并还原；冒烟拆分为通用检查与 `smoke-game.mjs` 游戏钩子、静态服务只监听本机；配置表生成原子化与 `tables --check`；update-core 失败回滚；脚本类型检查、`.mts` lint、CI 固定 Node | 开发 | 已完成；verify、Web 发布构建与冒烟通过；子 agent 代码评审问题已修复；发布为 game-core 1.2.3 |
 
 批次 3 中不依赖引擎的部分（HttpClient、存档迁移、频控）可在 S0 结束后与批次 2 并行；批次 7 审核等待期间可并行批次 8 中不依赖审核结果的任务。
 
