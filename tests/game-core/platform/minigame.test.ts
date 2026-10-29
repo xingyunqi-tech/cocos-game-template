@@ -537,6 +537,65 @@ describe('DouyinRecorder', () => {
         }
     });
 
+    it('returns the same result to repeated stop calls and stops the platform once', async () => {
+        const s = recorderSetup();
+        s.manager.stop.mockImplementation(() => undefined);
+        await s.recorder.start();
+        s.advance(5000);
+        const first = s.recorder.stop();
+        const second = s.recorder.stop();
+        expect(s.manager.stop).toHaveBeenCalledTimes(1);
+        s.listeners.stop?.({ videoPath: 'ttfile://once.mp4' });
+        await expect(first).resolves.toBe('ttfile://once.mp4');
+        await expect(second).resolves.toBe('ttfile://once.mp4');
+        await expect(s.recorder.stop()).resolves.toBeNull();
+    });
+
+    it('gives up waiting for the platform stop and can record again', async () => {
+        vi.useFakeTimers();
+        try {
+            const s = recorderSetup();
+            s.manager.stop.mockImplementation(() => undefined);
+            await s.recorder.start();
+            const stopped = s.recorder.stop();
+            await vi.advanceTimersByTimeAsync(5000);
+            await expect(stopped).resolves.toBeNull();
+            await expect(s.recorder.start()).resolves.toBe(true);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('can record again after the platform stop throws', async () => {
+        const s = recorderSetup();
+        await s.recorder.start();
+        s.manager.stop.mockImplementationOnce(() => {
+            throw new Error('stop failed');
+        });
+        await expect(s.recorder.stop()).resolves.toBeNull();
+        await expect(s.recorder.start()).resolves.toBe(true);
+    });
+
+    it('ignores a late platform stop that arrives after the stop timeout', async () => {
+        vi.useFakeTimers();
+        try {
+            const s = recorderSetup();
+            s.manager.stop.mockImplementation(() => undefined);
+            await s.recorder.start();
+            const stopped = s.recorder.stop();
+            await vi.advanceTimersByTimeAsync(5000);
+            await expect(stopped).resolves.toBeNull();
+            await s.recorder.start();
+            s.listeners.stop?.({ videoPath: 'ttfile://old.mp4' });
+            s.advance(5000);
+            const next = s.recorder.stop();
+            s.listeners.stop?.({ videoPath: 'ttfile://new.mp4' });
+            await expect(next).resolves.toBe('ttfile://new.mp4');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('reports failures and missing support', async () => {
         const s = recorderSetup();
         s.manager.start.mockImplementation(() => s.listeners.error?.({ errMsg: 'fail' }));

@@ -31,6 +31,10 @@ function splitUrl(url: string): { path: string; query: Record<string, string> } 
 export class MockTransport implements HttpTransport {
     private delay(ms: number, request: TransportRequest): Promise<void> {
         return new Promise((resolve, reject) => {
+            if (request.signal?.cancelled) {
+                reject(new HttpError('aborted', '请求已取消'));
+                return;
+            }
             const done = setTimeout(() => {
                 cleanup();
                 resolve();

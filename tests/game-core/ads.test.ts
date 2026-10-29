@@ -138,4 +138,49 @@ describe('AdService', () => {
         await expect(ads.showRewarded('x')).resolves.toEqual({ result: 'failed', reason: 'show_failed' });
         expect(ads.isShowing).toBe(false);
     });
+
+    it('waits without a time limit when the timeout is Infinity', async () => {
+        vi.useFakeTimers();
+        try {
+            const ads = new AdService();
+            let finish: (result: RewardedResult) => void = () => undefined;
+            ads.setProvider(
+                provider({
+                    needsUnitId: false,
+                    showRewarded: () => new Promise<RewardedResult>((resolve) => (finish = resolve)),
+                }),
+            );
+            ads.configure({ showTimeoutMs: Infinity });
+            const pending = ads.showRewarded('x');
+            await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+            expect(ads.isShowing).toBe(true);
+            finish({ result: 'completed' });
+            await expect(pending).resolves.toEqual({ result: 'completed' });
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('fails with timeout and accepts new ads when the provider never settles', async () => {
+        vi.useFakeTimers();
+        try {
+            const ads = new AdService();
+            const stuck = provider({
+                needsUnitId: false,
+                showRewarded: () => new Promise<RewardedResult>(() => undefined),
+            });
+            ads.setProvider(stuck);
+            ads.configure({ showTimeoutMs: 1000 });
+            const pending = ads.showRewarded('x');
+            await vi.advanceTimersByTimeAsync(999);
+            expect(ads.isShowing).toBe(true);
+            await vi.advanceTimersByTimeAsync(1);
+            await expect(pending).resolves.toEqual({ result: 'failed', reason: 'timeout' });
+            expect(ads.isShowing).toBe(false);
+            ads.setProvider(provider({ needsUnitId: false }));
+            await expect(ads.showRewarded('x')).resolves.toEqual({ result: 'completed' });
+        } finally {
+            vi.useRealTimers();
+        }
+    });
 });

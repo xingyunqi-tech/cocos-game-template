@@ -334,4 +334,20 @@ describe('MockTransport', () => {
         source.cancel();
         await expect(pendingRequest).rejects.toMatchObject({ kind: 'aborted' });
     });
+
+    it('rejects a delayed reply with aborted when cancelled while the handler runs', async () => {
+        const source = new CancelSource();
+        const mock = new MockTransport().on('GET', '/slow', () => {
+            source.cancel();
+            return { body: {}, delayMs: 1000 };
+        });
+        const request: TransportRequest = {
+            method: 'GET',
+            url: 'https://api.test/slow',
+            headers: {},
+            timeoutMs: 5000,
+            signal: source.signal,
+        };
+        await expect(mock.send(request)).rejects.toMatchObject({ kind: 'aborted' });
+    });
 });

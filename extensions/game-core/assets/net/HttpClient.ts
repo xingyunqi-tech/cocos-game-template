@@ -195,14 +195,16 @@ export class HttpClient {
     private async sendWithAuth(request: HttpRequest): Promise<HttpResponse> {
         const provider = request.skipAuth ? undefined : this.options.tokenProvider;
         if (!provider) return this.send(request, null);
-        if (this.refreshing) await cancellable(this.refreshing, request.signal);
+        const refreshed = this.refreshing ? await cancellable(this.refreshing, request.signal) : undefined;
         const used = provider.getToken();
         try {
             return await this.send(request, used);
         } catch (err) {
             if (!(err instanceof HttpError) || err.status !== 401 || request.skipRefresh) throw err;
             const current = provider.getToken();
-            const token = current && current !== used ? current : await this.refreshToken(provider);
+            if (current && current !== used) return this.send(request, current);
+            if (refreshed === null) throw err;
+            const token = await cancellable(this.refreshToken(provider), request.signal);
             if (!token) throw err;
             return this.send(request, token);
         }

@@ -298,4 +298,122 @@ describe('AuthService session recovery', () => {
         const s = setup({ loginError: platformFailure });
         await expect(s.auth.refresh()).resolves.toBeNull();
     });
+
+    it('shares one login between reconnect and refresh', async () => {
+        const s = setup({ lastUser: 'old' });
+        s.mock.on('POST', '/auth/login', () => ({ status: 503 }));
+        await s.auth.login();
+        let calls = 0;
+        s.mock.on('POST', '/auth/login', () => {
+            calls++;
+            return { body: { token: 'tok', refreshToken: 'r', userId: 'old', expiresIn: 60 } };
+        });
+        const [reconnected, token] = await Promise.all([s.auth.reconnect(), s.auth.refresh()]);
+        expect([reconnected, token, calls]).toEqual([true, 'tok', 1]);
+    });
+
+    it('keeps the session when refresh fails with a server or network error', async () => {
+        const s = setup();
+        await s.auth.login();
+        let logins = 0;
+        s.mock.on('POST', '/auth/login', () => {
+            logins++;
+            return { status: 500 };
+        });
+        s.mock.on('POST', '/auth/refresh', () => ({ status: 503 }));
+        await expect(s.auth.refresh()).resolves.toBeNull();
+        expect(s.auth.session).toMatchObject({ token: 't1', refreshToken: 'r' });
+        expect(logins).toBe(0);
+    });
+
+    it('does not log in again after logout until login is called', async () => {
+        const s = setup();
+        await s.auth.login();
+        s.auth.logout();
+        await expect(s.auth.refresh()).resolves.toBeNull();
+        await expect(s.auth.reconnect()).resolves.toBe(false);
+        expect(s.auth.session).toBeNull();
+        await expect(s.auth.login()).resolves.toMatchObject({ offline: false });
+        expect(s.auth.getToken()).toBe('t2');
+    });
+
+    it('keeps the session cleared when logout happens during a refresh or background login', async () => {
+        const s = setup();
+        await s.auth.login();
+        let finishRefresh: () => void = () => undefined;
+        s.mock.on(
+            'POST',
+            '/auth/refresh',
+            () => new Promise((resolve) => (finishRefresh = () => resolve({ body: { token: 'n', expiresIn: 60 } }))),
+        );
+        const refreshing = s.auth.refresh();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        s.auth.logout();
+        finishRefresh();
+        await refreshing;
+        expect(s.auth.session).toBeNull();
+
+        await s.auth.login();
+        s.mock.on('POST', '/auth/login', () => ({ status: 503 }));
+        await s.auth.login();
+        let finishLogin: () => void = () => undefined;
+        s.mock.on(
+            'POST',
+            '/auth/login',
+            () =>
+                new Promise(
+                    (resolve) =>
+                        (finishLogin = () =>
+                            resolve({ body: { token: 'late', refreshToken: 'r', userId: 'u-c', expiresIn: 60 } })),
+                ),
+        );
+        const reconnecting = s.auth.reconnect();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        s.auth.logout();
+        finishLogin();
+        await expect(reconnecting).resolves.toBe(false);
+        expect(s.auth.session).toBeNull();
+    });
+
+    it('rejects a request cancelled while its token refresh is pending', async () => {
+        const s = setup();
+        await s.auth.login();
+        let finishRefresh: () => void = () => undefined;
+        let refreshing = false;
+        s.mock.on('POST', '/auth/refresh', () => {
+            refreshing = true;
+            return new Promise((resolve) => (finishRefresh = () => resolve({ body: { token: 'n', expiresIn: 60 } })));
+        });
+        s.mock.on('GET', '/me', () => ({ status: 401 }));
+        const cancel = new CancelSource();
+        const pending = s.http.get('me', undefined, { signal: cancel.signal });
+        await vi.waitFor(() => expect(refreshing).toBe(true));
+        cancel.cancel();
+        await expect(pending).rejects.toMatchObject({ kind: 'aborted' });
+        finishRefresh();
+    });
+
+    it('does not refresh again for requests that waited on a failed refresh', async () => {
+        const s = setup();
+        await s.auth.login();
+        let logins = 0;
+        s.mock.on('POST', '/auth/login', () => {
+            logins++;
+            return { status: 401 };
+        });
+        let failRefresh: () => void = () => undefined;
+        let refreshing = false;
+        s.mock.on('POST', '/auth/refresh', () => {
+            refreshing = true;
+            return new Promise((resolve) => (failRefresh = () => resolve({ status: 401 })));
+        });
+        s.mock.on('GET', '/me', () => ({ status: 401 }));
+        const first = s.http.get('me');
+        await vi.waitFor(() => expect(refreshing).toBe(true));
+        const second = s.http.get('me');
+        failRefresh();
+        await expect(first).rejects.toMatchObject({ status: 401 });
+        await expect(second).rejects.toMatchObject({ status: 401 });
+        expect(logins).toBe(1);
+    });
 });

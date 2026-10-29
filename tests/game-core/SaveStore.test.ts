@@ -328,6 +328,72 @@ describe('SaveStore edge cases', () => {
         expect((JSON.parse(store.getItem('gc:u:profile')!) as { v: number }).v).toBe(2);
     });
 
+    it('never writes over data that has no migration path', () => {
+        const onWarn = vi.fn();
+        const { save, store } = setup({ onWarn });
+        const old = JSON.stringify({ v: 1, d: { level: 5, coins: 50, name: 'a' } });
+        store.setItem('gc:u:profile', old);
+        const slot = save.slot('profile', profile);
+        expect(slot.get()).toEqual(profile.defaults());
+        slot.update((p) => (p.coins = 1));
+        save.flush();
+        expect(store.getItem('gc:u:profile')).toBe(old);
+        expect(onWarn).toHaveBeenCalledWith('存档版本无法迁移，使用默认值且不写入', { key: 'profile', from: 1, to: 2 });
+        expect(onWarn).toHaveBeenCalledWith('存档版本无法迁移，不写入', { key: 'profile', to: 2 });
+    });
+
+    it('never writes over data whose migration throws, even when setting without reading first', () => {
+        const onWarn = vi.fn();
+        const { save, store } = setup({ onWarn });
+        const old = JSON.stringify({ v: 1, d: { level: 5 } });
+        store.setItem('gc:u:profile', old);
+        const migrations = {
+            2: () => {
+                throw new Error('bad');
+            },
+        };
+        save.slot('profile', { ...profile, migrations }).set(profile.defaults());
+        save.flush();
+        expect(store.getItem('gc:u:profile')).toBe(old);
+        expect(onWarn).toHaveBeenCalledWith('存档版本无法迁移，使用默认值且不写入', {
+            key: 'profile',
+            from: 1,
+            to: 2,
+            error: 'bad',
+        });
+    });
+
+    it('writes again after a version bump of a slot holding a primitive value', () => {
+        const { save, store } = setup();
+        store.setItem('gc:u:best', JSON.stringify({ v: 1, d: 5 }));
+        const slot = save.slot<number>('best', { version: 2, defaults: () => 0, migrations: { 2: (d) => d } });
+        expect(slot.get()).toBe(0);
+        slot.set(7);
+        save.flush();
+        expect(JSON.parse(store.getItem('gc:u:best')!)).toEqual({ v: 2, d: 7 });
+    });
+
+    it('backs up unparsable data and then writes new data', () => {
+        const { save, store } = setup();
+        store.setItem('gc:u:profile', '{broken');
+        const slot = save.slot('profile', profile);
+        expect(slot.get()).toEqual(profile.defaults());
+        expect(store.getItem('gc:u:__bak:profile')).toBe('{broken');
+        slot.update((p) => (p.coins = 3));
+        save.flush();
+        expect(JSON.parse(store.getItem('gc:u:profile')!)).toEqual({ v: 2, d: { level: 1, coins: 3, name: '' } });
+    });
+
+    it('stores backups of scoped data outside every scope', () => {
+        const { save, store } = setup();
+        save.setScope('u1');
+        store.setItem('gc:u:u1:profile', 'null');
+        save.slot('profile', profile).get();
+        expect(store.getItem('gc:u:__bak:u1:profile')).toBe('null');
+        save.clearScope();
+        expect(store.getItem('gc:u:__bak:u1:profile')).toBe('null');
+    });
+
     it('measures size in UTF-8 bytes', () => {
         expect(utf8Bytes('ab')).toBe(2);
         expect(utf8Bytes('中文')).toBe(6);

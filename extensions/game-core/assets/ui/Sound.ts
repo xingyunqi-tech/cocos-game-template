@@ -34,17 +34,21 @@ export class SoundService {
         return this.clips[key];
     }
 
-    /** 记录为当前背景音乐；音乐开关关闭时不播放并返回 false，打开开关后由 resumeMusic 播放；加载期间被新的播放或停止取代时返回 false */
+    /** 记录为当前背景音乐；音乐开关关闭时不播放并返回 false，打开开关后由 resumeMusic 播放；加载期间被新的播放或停止取代时返回 false；不循环的音乐播完后清除当前背景音乐 */
     async playMusic(ref: SoundRef, loop = true): Promise<boolean> {
         this.lastMusic = { ref, loop };
         const request = ++this.musicRequest;
         const clip = await this.clip(ref);
         if (request !== this.musicRequest) return false;
         if (!clip || !oops.audio?.music || !oops.audio.music.getSwitch()) return false;
-        oops.audio.playMusic(clip, { loop });
+        const onPlayComplete = () => {
+            if (request === this.musicRequest) this.lastMusic = null;
+        };
+        oops.audio.playMusic(clip, loop ? { loop } : { loop, onPlayComplete });
         return true;
     }
 
+    /** 从头播放当前背景音乐；没有当前背景音乐时返回 false */
     resumeMusic(): Promise<boolean> {
         return this.lastMusic ? this.playMusic(this.lastMusic.ref, this.lastMusic.loop) : Promise.resolve(false);
     }

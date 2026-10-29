@@ -66,7 +66,8 @@ export interface StorageUsage {
     limitKB: number;
 }
 
-export type AdFailReason = 'unsupported' | 'not_configured' | 'busy' | 'frequency' | 'load_failed' | 'show_failed';
+export type AdFailReason =
+    'unsupported' | 'not_configured' | 'busy' | 'frequency' | 'load_failed' | 'show_failed' | 'timeout';
 
 export interface RewardedResult {
     result: 'completed' | 'skipped' | 'failed';

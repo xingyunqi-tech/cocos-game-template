@@ -69,8 +69,10 @@ function invalidResponse(): HttpError {
 export class AuthService implements TokenProvider {
     private current: AuthSession | null = null;
     private activeUser = '';
-    private reconnecting: Promise<boolean> | null = null;
+    private relogin: Promise<AuthSession> | null = null;
     private offlineEntry = false;
+    private loggedOut = false;
+    private epoch = 0;
 
     constructor(private readonly options: AuthServiceOptions) {}
 
@@ -98,8 +100,11 @@ export class AuthService implements TokenProvider {
     }
 
     async login(signal?: CancelSignal): Promise<LoginOutcome> {
+        this.loggedOut = false;
+        this.epoch++;
+        this.relogin = null;
         try {
-            const session = await this.loginOnline(signal, true);
+            const session = await this.loginOnline(signal, true, this.epoch);
             return { userId: session.userId, offline: false };
         } catch (err) {
             if (err instanceof HttpError && err.kind === 'aborted') throw err;
@@ -117,27 +122,30 @@ export class AuthService implements TokenProvider {
     /** 离线进入后重新联网登录；userId 与当前存档不一致时只更新会话，存档作用域下次启动生效 */
     reconnect(): Promise<boolean> {
         if (this.current) return Promise.resolve(true);
-        this.reconnecting ??= this.loginOnline(undefined, false)
-            .then(
-                () => true,
-                () => false,
-            )
-            .finally(() => {
-                this.reconnecting = null;
-            });
-        return this.reconnecting;
+        if (this.loggedOut) return Promise.resolve(false);
+        return this.loginInBackground().then(
+            () => true,
+            () => false,
+        );
     }
 
+    /** 清除会话；之后不自动重新登录，直到再次调用 login() */
     logout() {
         this.current = null;
+        this.loggedOut = true;
+        this.epoch++;
+        this.relogin = null;
     }
 
     getToken(): string | null {
         return this.current?.token ?? null;
     }
 
+    /** 刷新失败为网络错误、超时或 5xx 时保留会话并返回 null；其他失败清除会话后重新登录 */
     async refresh(): Promise<string | null> {
+        if (this.loggedOut) return null;
         const session = this.current;
+        const epoch = this.epoch;
         if (session) {
             try {
                 const res = await this.options.http.post<RefreshResponse>(
@@ -146,6 +154,7 @@ export class AuthService implements TokenProvider {
                     { skipAuth: true },
                 );
                 if (typeof res.data?.token !== 'string' || !res.data.token) throw invalidResponse();
+                if (epoch !== this.epoch || this.current !== session) return this.current?.token ?? null;
                 this.current = {
                     ...session,
                     token: res.data.token,
@@ -153,15 +162,27 @@ export class AuthService implements TokenProvider {
                     expiresAt: this.now() + res.data.expiresIn * 1000,
                 };
                 return this.current.token;
-            } catch {
+            } catch (err) {
+                if (err instanceof HttpError && isOfflineError(err)) return null;
+                if (epoch !== this.epoch) return null;
+                if (this.current !== session) return this.current?.token ?? null;
                 this.current = null;
             }
         }
         try {
-            return (await this.loginOnline(undefined, false)).token;
+            return (await this.loginInBackground()).token;
         } catch {
             return null;
         }
+    }
+
+    private loginInBackground(): Promise<AuthSession> {
+        if (this.relogin) return this.relogin;
+        const relogin = this.loginOnline(undefined, false, this.epoch).finally(() => {
+            if (this.relogin === relogin) this.relogin = null;
+        });
+        this.relogin = relogin;
+        return relogin;
     }
 
     private fallbackUser(err: unknown): string {
@@ -170,7 +191,11 @@ export class AuthService implements TokenProvider {
         return last && isOfflineError(err) ? last : '';
     }
 
-    private async loginOnline(signal: CancelSignal | undefined, switchUser: boolean): Promise<AuthSession> {
+    private async loginOnline(
+        signal: CancelSignal | undefined,
+        switchUser: boolean,
+        epoch: number,
+    ): Promise<AuthSession> {
         const platform = this.options.platform();
         const credential = await this.platformLogin(platform, signal);
         const requestStartedAt = (this.options.mark ?? this.options.now ?? Date.now)();
@@ -186,6 +211,7 @@ export class AuthService implements TokenProvider {
         if (typeof data?.token !== 'string' || !data.token || (data.userId ?? '') === '') throw invalidResponse();
         if (String(data.userId).includes(':'))
             throw new HttpError('parse', `userId 不能包含冒号：${String(data.userId)}`);
+        if (epoch !== this.epoch) throw new HttpError('aborted', '登录状态已变化');
         const session: AuthSession = {
             token: data.token,
             refreshToken: data.refreshToken ?? '',

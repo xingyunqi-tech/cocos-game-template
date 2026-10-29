@@ -48,6 +48,7 @@ export class DouyinSidebar implements ISidebar {
 
 export const RECORDER_MIN_SECONDS = 3;
 export const RECORDER_START_TIMEOUT_MS = 3000;
+export const RECORDER_STOP_TIMEOUT_MS = 5000;
 
 /** 录满时长自动结束时保存视频，之后调用 stop() 返回该视频 */
 export class DouyinRecorder implements IRecorder {
@@ -56,6 +57,8 @@ export class DouyinRecorder implements IRecorder {
     private state: 'idle' | 'starting' | 'recording' = 'idle';
     private lastVideo: string | null = null;
     private pendingStop: ((path: string | null) => void) | null = null;
+    private stopping: Promise<string | null> | null = null;
+    private ignoreLateStop = false;
     private pendingStart: ((ok: boolean) => void) | null = null;
 
     constructor(private readonly now: () => number = Date.now) {}
@@ -96,20 +99,38 @@ export class DouyinRecorder implements IRecorder {
             this.pendingStart = null;
             return Promise.resolve(null);
         }
+        if (this.stopping) return this.stopping;
+        this.ignoreLateStop = false;
         if (this.state !== 'recording') {
             const video = this.lastVideo;
             this.lastVideo = null;
             return Promise.resolve(video);
         }
-        return new Promise((resolve) => {
-            this.pendingStop = resolve;
-            try {
-                manager.stop();
-            } catch {
-                this.pendingStop = null;
-                resolve(null);
-            }
-        });
+        let resolveStop: (path: string | null) => void = () => undefined;
+        const stopping = new Promise<string | null>((resolve) => (resolveStop = resolve));
+        this.pendingStop = resolveStop;
+        this.stopping = stopping;
+        const pending = resolveStop;
+        setTimeout(() => {
+            if (this.pendingStop !== pending) return;
+            this.state = 'idle';
+            this.ignoreLateStop = true;
+            this.settleStop(null);
+        }, RECORDER_STOP_TIMEOUT_MS);
+        try {
+            manager.stop();
+        } catch {
+            this.state = 'idle';
+            this.settleStop(null);
+        }
+        return stopping;
+    }
+
+    private settleStop(video: string | null) {
+        const pending = this.pendingStop;
+        this.pendingStop = null;
+        this.stopping = null;
+        pending?.(video);
     }
 
     share(videoPath: string, options: ShareOptions & { topics?: string[] } = {}): Promise<ShareResult> {
@@ -148,20 +169,22 @@ export class DouyinRecorder implements IRecorder {
                 this.pendingStart = null;
             });
             manager.onStop((res) => {
+                if (this.ignoreLateStop) {
+                    this.ignoreLateStop = false;
+                    return;
+                }
                 const wasRecording = this.state === 'recording';
                 const long = this.now() - this.startedAt >= RECORDER_MIN_SECONDS * 1000;
                 const video = wasRecording && long && res?.videoPath ? res.videoPath : null;
                 this.state = 'idle';
-                if (this.pendingStop) this.pendingStop(video);
+                if (this.pendingStop) this.settleStop(video);
                 else this.lastVideo = video;
-                this.pendingStop = null;
             });
             manager.onError(() => {
                 this.state = 'idle';
                 this.pendingStart?.(false);
-                this.pendingStop?.(null);
                 this.pendingStart = null;
-                this.pendingStop = null;
+                this.settleStop(null);
             });
         }
         return manager;

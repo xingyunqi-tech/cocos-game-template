@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const loads: Record<string, (clip: unknown) => void> = {};
 const played: string[] = [];
-const music = { stopped: 0 };
+const music: { stopped: number; complete?: () => void } = { stopped: 0 };
 
 vi.mock('cc', () => ({ AudioClip: class {} }));
 vi.mock('db://game-core/config/Bundles', () => ({
@@ -15,7 +15,10 @@ vi.mock('db://oops-framework/core/Oops', () => ({
     oops: {
         audio: {
             music: { getSwitch: () => true, stop: () => void music.stopped++ },
-            playMusic: (clip: { name: string }) => played.push(clip.name),
+            playMusic: (clip: { name: string }, params?: { onPlayComplete?: () => void }) => {
+                played.push(clip.name);
+                music.complete = params?.onPlayComplete;
+            },
             playEffect: () => ({}),
         },
     },
@@ -82,5 +85,30 @@ describe('SoundService', () => {
         expect(loads['shop/bgm']).toBeDefined();
         loads['shop/bgm'](clip('bgm'));
         await expect(again).resolves.toBe(true);
+    });
+
+    it('forgets music that does not loop once it finishes', async () => {
+        const sound = new SoundService();
+        const once = sound.playMusic(ref('jingle'), false);
+        loads['b/jingle'](clip('jingle'));
+        await expect(once).resolves.toBe(true);
+        music.complete?.();
+        await expect(sound.resumeMusic()).resolves.toBe(false);
+    });
+
+    it('keeps the current music when an earlier one-shot music finishes', async () => {
+        const sound = new SoundService();
+        const once = sound.playMusic(ref('intro'), false);
+        loads['b/intro'](clip('intro'));
+        await once;
+        const finishIntro = music.complete;
+        const loop = sound.playMusic(ref('theme'));
+        loads['b/theme'](clip('theme'));
+        await loop;
+        finishIntro?.();
+        played.length = 0;
+        const resumed = sound.resumeMusic();
+        await expect(resumed).resolves.toBe(true);
+        expect(played).toEqual(['theme']);
     });
 });

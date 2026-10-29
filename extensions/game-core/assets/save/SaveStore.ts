@@ -25,6 +25,9 @@ export interface SaveStoreOptions {
 }
 
 const INDEX_KEY = '__index';
+const BACKUP_SCOPE = '__bak';
+
+type Lock = 'newer' | 'unmigratable' | null;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -65,6 +68,11 @@ export function migrate(raw: Envelope, target: number, migrations: Record<number
     return data;
 }
 
+function hasMigrationPath(from: number, to: number, migrations: Record<number, Migration> = {}): boolean {
+    for (let version = from + 1; version <= to; version++) if (!migrations[version]) return false;
+    return true;
+}
+
 export class SaveSlot<T> {
     private cache: { generation: number; value: T } | null = null;
 
@@ -82,6 +90,7 @@ export class SaveSlot<T> {
     }
 
     set(value: T) {
+        if (this.cache === null || this.cache.generation !== this.owner.generation) this.get();
         this.cache = { generation: this.owner.generation, value };
         const version = this.options.version;
         this.owner.markDirty(this.key, version, () => ({ v: version, d: value }));
@@ -105,7 +114,7 @@ export class SaveStore {
     private timer: unknown = null;
     private scopeGeneration = 0;
     private readonly registered = new Set<string>();
-    private readonly newer = new Map<string, boolean>();
+    private readonly locks = new Map<string, Lock>();
     private readonly blockedWarned = new Set<string>();
 
     constructor(private readonly options: SaveStoreOptions) {}
@@ -141,25 +150,42 @@ export class SaveStore {
         const fullKey = this.prefix + key;
         const raw = this.options.store.getItem(fullKey);
         if (raw === null || raw === undefined || raw === '') return options.defaults();
-        let data: unknown;
+        let parsed: unknown;
         try {
-            const parsed: unknown = JSON.parse(raw);
+            parsed = JSON.parse(raw);
             if (!isEnvelope(parsed)) throw new Error('存档结构无效');
-            const newer = parsed.v > options.version;
-            this.newer.set(fullKey, newer);
-            if (newer) {
-                this.warn('存档版本高于当前代码，使用默认值且不写入', { key, from: parsed.v, to: options.version });
-                return options.defaults();
-            }
-            data = migrate(parsed, options.version, options.migrations);
-            if (data === undefined) {
-                this.warn('存档版本无法迁移，使用默认值', { key, from: parsed.v, to: options.version });
-                return options.defaults();
-            }
         } catch (err) {
+            this.locks.set(fullKey, null);
+            this.backup(fullKey, raw);
             this.warn('存档解析失败，使用默认值', { key, error: errorText(err) });
             return options.defaults();
         }
+        if (parsed.v > options.version) {
+            this.locks.set(fullKey, 'newer');
+            this.warn('存档版本高于当前代码，使用默认值且不写入', { key, from: parsed.v, to: options.version });
+            return options.defaults();
+        }
+        const detail = { key, from: parsed.v, to: options.version };
+        let data: unknown;
+        try {
+            data = hasMigrationPath(parsed.v, options.version, options.migrations)
+                ? migrate(parsed, options.version, options.migrations)
+                : null;
+        } catch (err) {
+            data = null;
+            Object.assign(detail, { error: errorText(err) });
+        }
+        if (data === null) {
+            this.locks.set(fullKey, 'unmigratable');
+            this.warn('存档版本无法迁移，使用默认值且不写入', detail);
+            return options.defaults();
+        }
+        if (data === undefined) {
+            this.locks.set(fullKey, null);
+            this.warn('存档版本无法迁移，使用默认值', detail);
+            return options.defaults();
+        }
+        this.locks.set(fullKey, null);
         const defaults = options.defaults();
         if (isPlainObject(defaults) && isPlainObject(data)) return { ...defaults, ...data };
         return data as T;
@@ -168,10 +194,12 @@ export class SaveStore {
     markDirty(key: string, version: number, serialize: () => Envelope) {
         this.checkScope('写入', key);
         const fullKey = this.prefix + key;
-        if (this.isNewer(fullKey, version)) {
+        const lock = this.lockOf(fullKey, version);
+        if (lock) {
             if (!this.blockedWarned.has(fullKey)) {
                 this.blockedWarned.add(fullKey);
-                this.warn('存档版本高于当前代码，不写入', { key, to: version });
+                const message = lock === 'newer' ? '存档版本高于当前代码，不写入' : '存档版本无法迁移，不写入';
+                this.warn(message, { key, to: version });
             }
             return;
         }
@@ -221,7 +249,7 @@ export class SaveStore {
         const prefix = this.prefix;
         const inScope = (key: string) => key.startsWith(prefix) && !key.slice(prefix.length).includes(':');
         for (const key of Array.from(this.dirty.keys())) if (inScope(key)) this.dirty.delete(key);
-        for (const key of Array.from(this.newer.keys())) if (inScope(key)) this.forgetVersion(key);
+        for (const key of Array.from(this.locks.keys())) if (inScope(key)) this.forgetVersion(key);
         const index = this.readIndex();
         for (const key of index) if (inScope(key)) this.options.store.removeItem(key);
         this.writeIndex(index.filter((key) => !inScope(key)));
@@ -267,13 +295,24 @@ export class SaveStore {
         return true;
     }
 
-    private isNewer(fullKey: string, version: number): boolean {
-        let newer = this.newer.get(fullKey);
-        if (newer === undefined) {
-            newer = (this.storedVersion(fullKey) ?? 0) > version;
-            this.newer.set(fullKey, newer);
+    private lockOf(fullKey: string, version: number): Lock {
+        let lock = this.locks.get(fullKey);
+        if (lock === undefined) {
+            lock = (this.storedVersion(fullKey) ?? 0) > version ? 'newer' : null;
+            this.locks.set(fullKey, lock);
         }
-        return newer;
+        return lock;
+    }
+
+    /** 损坏的存档原文保存到 `<prefix>:__bak:<作用域>:<key>`，每个 key 只保留最近一份 */
+    private backup(fullKey: string, raw: string) {
+        const root = this.options.prefix ?? 'gc';
+        const backupKey = `${root}:${BACKUP_SCOPE}:${fullKey.slice(root.length + 1)}`;
+        try {
+            this.options.store.setItem(backupKey, raw);
+        } catch (err) {
+            this.warn('存档备份失败', { key: backupKey, error: errorText(err) });
+        }
     }
 
     private storedVersion(fullKey: string): number | null {
@@ -288,7 +327,7 @@ export class SaveStore {
     }
 
     private forgetVersion(fullKey: string) {
-        this.newer.delete(fullKey);
+        this.locks.delete(fullKey);
         this.blockedWarned.delete(fullKey);
     }
 

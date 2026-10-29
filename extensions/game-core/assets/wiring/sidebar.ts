@@ -45,7 +45,9 @@ export function onSidebarLaunch(listener: () => void): () => void {
     }
     sidebarListeners.push(listener);
     const off = platform.onShow((options) => {
-        if (userSave.hasScope && platform.sidebar.isLaunchedFromSidebar(options)) listener();
+        if (!platform.sidebar.isLaunchedFromSidebar(options)) return;
+        if (userSave.hasScope) listener();
+        else if (!pendingSidebarListeners.includes(listener)) pendingSidebarListeners.push(listener);
     });
     return () => {
         off();

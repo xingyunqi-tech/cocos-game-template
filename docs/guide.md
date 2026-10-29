@@ -38,8 +38,9 @@ npm run new:module -- shop
 存档约定：
 
 - 用户进度用 `userSave.slot`，设备设置用 `deviceSave.slot`；不要调用 `oops.storage.setUser`、`sys.localStorage.clear()`
-- slot 的 `version` 递增时提供 `migrations[newVersion]`，迁移失败回退默认值
+- slot 的 `version` 递增时提供 `migrations[newVersion]`；缺少迁移步骤或迁移抛错时读到默认值，本次运行的修改不写入，原存档保留，补上迁移后的版本可正常读出
 - 本地存档版本高于代码中的 `version`（版本回退、灰度回滚）时读到默认值，本次运行的修改不写入，原存档保留
+- 存档内容无法解析时读到默认值，原文备份到 `<前缀>:__bak:<作用域>:<key>`（每个 key 保留最近一份），之后正常写入
 - 同一个存档对象中 slot key 只能注册一次，重复注册抛错；game-core 已占用 userSave 的 `sidebar`，deviceSave 的 `device`、`auth`、`settings`、`gm`、`remote-config`
 - 单个 slot 超过 512KB 会告警，平台单 key 上限 1MB、总量 10MB
 

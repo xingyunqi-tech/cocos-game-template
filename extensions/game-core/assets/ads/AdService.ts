@@ -6,6 +6,9 @@ export interface AdUnits {
     interstitial?: Record<string, string>;
 }
 
+export const AD_SHOW_TIMEOUT_MS = 180000;
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
 export interface AdServiceOptions {
     policy?: AdPolicy;
     onResult?: (
@@ -19,6 +22,7 @@ export class AdService {
     private provider: AdProvider | null = null;
     private units: AdUnits = {};
     private showing = false;
+    private showTimeoutMs = AD_SHOW_TIMEOUT_MS;
     readonly policy: AdPolicy;
     /** 调试用：设置后不调用平台广告，直接返回该结果 */
     simulate: RewardedResult['result'] | null = null;
@@ -31,12 +35,14 @@ export class AdService {
         this.provider = provider;
     }
 
-    configure(config: AdUnits & { policy?: Partial<AdPolicyOptions> }) {
+    /** showTimeoutMs：平台在该时间内没有返回展示结果时按 timeout 失败处理，0 或 Infinity 不限时 */
+    configure(config: AdUnits & { policy?: Partial<AdPolicyOptions>; showTimeoutMs?: number }) {
         this.units = {
             rewarded: { ...this.units.rewarded, ...config.rewarded },
             interstitial: { ...this.units.interstitial, ...config.interstitial },
         };
         if (config.policy) this.policy.configure(config.policy);
+        if (config.showTimeoutMs !== undefined) this.showTimeoutMs = config.showTimeoutMs;
     }
 
     get isShowing(): boolean {
@@ -88,11 +94,22 @@ export class AdService {
 
     private async run<T extends RewardedResult | InterstitialResult>(show: () => Promise<T>): Promise<T> {
         this.showing = true;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const limit = this.showTimeoutMs;
+        const pending = [show()];
+        if (limit > 0 && limit <= MAX_TIMER_MS) {
+            pending.push(
+                new Promise<T>((resolve) => {
+                    timer = setTimeout(() => resolve({ result: 'failed', reason: 'timeout' } as T), limit);
+                }),
+            );
+        }
         try {
-            return await show();
+            return await Promise.race(pending);
         } catch {
             return { result: 'failed', reason: 'show_failed' } as T;
         } finally {
+            clearTimeout(timer);
             this.showing = false;
         }
     }

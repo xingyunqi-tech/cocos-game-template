@@ -1,6 +1,7 @@
-import { AudioSource, sys } from 'cc';
+import { sys } from 'cc';
 import { DEBUG } from 'cc/env';
 import { oops } from 'db://oops-framework/core/Oops';
+import { AdPolicy } from '../ads/AdPolicy';
 import { AdService } from '../ads/AdService';
 import { BootPipeline } from '../boot/BootPipeline';
 import { Lifecycle } from '../boot/Lifecycle';
@@ -100,7 +101,14 @@ export const LOGIN_STEP_TIMEOUT_MS = 30000;
 
 export const network = new NetworkStatus();
 export const appUpdate = new AppUpdate();
+function adClock(): () => number {
+    let last = platform.monotonicNow();
+    if (last === null) return Date.now;
+    return () => (last = platform.monotonicNow() ?? last ?? 0);
+}
+
 export const ads = new AdService({
+    policy: new AdPolicy({}, adClock()),
     onResult: (kind, placement, outcome) =>
         track('ad_result', {
             kind,
@@ -149,12 +157,10 @@ export const settings = new Settings(
         return {
             getMusic: () => audio.music.getSwitch(),
             setMusic: (on) => {
+                const wasOn = audio.music.getSwitch();
                 audio.music.setSwitch(on);
                 audio.save();
-                if (!on) return;
-                const source = audio.music.getComponent(AudioSource);
-                if (source?.clip && !source.playing) source.play();
-                else if (!source?.clip) void sound.resumeMusic();
+                if (on && !wasOn) void sound.resumeMusic();
             },
             getEffect: () => audio.effect.getSwitch(),
             setEffect: (on) => {
