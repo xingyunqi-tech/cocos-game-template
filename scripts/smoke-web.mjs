@@ -5,7 +5,9 @@ import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { chromium } from 'playwright-core';
-import { PLATFORMS, ROOT } from './lib/cocos.mjs';
+import { loadLocalEnv, PLATFORMS, ROOT } from './lib/cocos.mjs';
+
+loadLocalEnv();
 
 const { values } = parseArgs({
     options: {

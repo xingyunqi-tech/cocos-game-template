@@ -4,7 +4,7 @@
 
 | 任务 | 运行环境 | 触发 | 内容 |
 | --- | --- | --- | --- |
-| `verify` | GitHub 托管 Ubuntu | push 到 main、PR | `npm ci`、`npm run verify` |
+| `verify` | GitHub 托管 Ubuntu | push 到 main、PR | `npm ci`、`npm run verify`（Node 版本取 `.nvmrc`） |
 | `build` | 自建 Runner（标签 `self-hosted`、`macOS`、`cocos-creator`） | push 到 main | Web 调试构建 + 冒烟、三端发布构建 + 包体检查，产物与包体报告上传为 artifact |
 
 ## 自建 Runner
@@ -14,8 +14,9 @@ Cocos 命令行构建需要图形会话，Runner 需满足：
 - macOS，用户登录状态下以 LaunchAgent 方式运行 GitHub Actions Runner（不能用无界面的 LaunchDaemon）
 - 安装 Cocos Creator 3.8.8（默认路径 `/Applications/Cocos/Creator/3.8.8/CocosCreator.app`，其他路径设置 `COCOS_CREATOR_APP`）
 - 安装 Google Chrome（冒烟测试用，其他路径设置 `CHROME_PATH`）
-- Node.js 22.13 以上
 - 注册 Runner 时添加标签 `cocos-creator`
+
+Node.js 由工作流按 `.nvmrc` 安装。工作流只读仓库内容（`permissions: contents: read`）；同一 PR 的新提交会取消进行中的运行，push 到 main 的每个提交都完整运行；`verify` 超时 15 分钟、`build` 超时 60 分钟；构建失败时仍上传日志与已有产物。
 
 ## Secrets
 

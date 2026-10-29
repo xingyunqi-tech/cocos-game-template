@@ -30,7 +30,7 @@ npm run build -- web --debug && npm run smoke:web
 
 ## 编码约束
 
-- Cocos 构建使用 Babel loose 模式，对 Set、Map 等非数组可迭代对象使用展开语法（`[...set]`）会得到错误结果；改用 `Array.from(set)`。单测环境发现不了这类问题，依赖 `npm run smoke:web` 覆盖
+- Cocos 构建使用 Babel loose 模式，对 Set、Map 等非数组可迭代对象使用展开语法（`[...set]`）或数组解构（`const [a] = set`）会得到错误结果；改用 `Array.from(set)`。单测环境发现不了这类问题，由 ESLint 规则 `cocos/array-spread-only` 检查
 - 平台无关的逻辑写成不依赖 `cc` 的纯 TS 模块，便于 Vitest 覆盖
 
 ## game-core 结构
