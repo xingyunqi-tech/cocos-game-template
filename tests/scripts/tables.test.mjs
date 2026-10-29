@@ -83,6 +83,20 @@ describe('cell values', () => {
         expect(() => convert(['k', 'a', 1, '1,2,'])).toThrow('list[2] 为空');
     });
 
+    it('rejects ints outside the safe integer range and floats that overflow', () => {
+        expect(() => convert(['k', 'a', '12345678901234567890'])).toThrow('n 超出安全整数范围');
+        expect(convert(['k', 'a', '9007199254740991']).records.k.n).toBe(9007199254740991);
+        expect(() => convertSheet('t', [['id', 'f'], ['string', 'float'], [], ['k', '1e999']])).toThrow(
+            'f 超出数值范围',
+        );
+    });
+
+    it('rejects __proto__ as a field name', () => {
+        expect(() => convertSheet('t', [['id', '__proto__'], ['int', 'int'], [], [1, 2]])).toThrow(
+            '字段名 __proto__ 不合法',
+        );
+    });
+
     it('accepts keys that collide with object prototype names', () => {
         const table = convertSheet('t', [...header, ['toString', 'a'], ['constructor', 'b']]);
         expect(Object.keys(table.records)).toEqual(['toString', 'constructor']);

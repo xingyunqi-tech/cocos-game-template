@@ -75,6 +75,21 @@ export function judgeBuild(exitCode, log) {
     return { ok: exitCode === EXIT_SUCCESS && errors.length === 0, exitCode, errors };
 }
 
+const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143, SIGHUP: 129 };
+
+/** 收到中断信号时执行 cleanup，再以对应的信号退出码退出；返回取消监听的函数 */
+export function onInterrupt(cleanup) {
+    const handler = async (signal) => {
+        await cleanup(signal);
+        process.exit(SIGNAL_EXIT_CODES[signal]);
+    };
+    const signals = Object.keys(SIGNAL_EXIT_CODES);
+    for (const signal of signals) process.once(signal, handler);
+    return () => {
+        for (const signal of signals) process.off(signal, handler);
+    };
+}
+
 export function loadLocalEnv(file = join(ROOT, '.env.local')) {
     if (existsSync(file)) process.loadEnvFile(file);
 }
@@ -150,13 +165,10 @@ export async function runBuild(platform, { debug = false, allowPlaceholderAppid 
     const out = createWriteStream(logFile);
     let log = '';
     let child;
-    const interrupt = async (signal) => {
+    const offInterrupt = onInterrupt(async (signal) => {
         child?.kill(signal);
         await restore();
-        process.exit(130);
-    };
-    const signals = ['SIGINT', 'SIGTERM', 'SIGHUP'];
-    for (const signal of signals) process.once(signal, interrupt);
+    });
     let exitCode;
     try {
         exitCode = await new Promise((done, fail) => {
@@ -173,7 +185,7 @@ export async function runBuild(platform, { debug = false, allowPlaceholderAppid 
             child.on('close', done);
         });
     } finally {
-        for (const signal of signals) process.off(signal, interrupt);
+        offInterrupt();
         await new Promise((done) => out.end(done));
         await restore();
     }

@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { excludeRemoteForDouyin, prepareUpload, uploadDouyin } from '../../scripts/lib/upload.mjs';
+import { spawnSync } from 'node:child_process';
+import { excludeRemoteForDouyin, prepareUpload, remoteCommand, uploadDouyin } from '../../scripts/lib/upload.mjs';
 
 let dirs = [];
 
@@ -136,5 +137,35 @@ describe('upload safeguards', () => {
         expect(home).toBeTruthy();
         expect(existsSync(home)).toBe(false);
         expect(process.env.TMA_CLI_HOME).toBe(before);
+    });
+
+    it('removes its interrupt handlers after the upload', async () => {
+        const { root } = project('bytedance-mini-game', 'tt1');
+        const plan = prepareUpload('douyin', args, env, root);
+        const before = process.listenerCount('SIGINT');
+        const tma = { setAppConfig: vi.fn(), upload: vi.fn(() => Promise.reject(new Error('net'))) };
+        await expect(uploadDouyin(plan, () => Promise.resolve({ default: tma }))).rejects.toThrow('net');
+        expect(process.listenerCount('SIGINT')).toBe(before);
+    });
+});
+
+describe('remoteCommand', () => {
+    it('references the remote directory through an environment variable in every quoting context', () => {
+        expect(remoteCommand('cp -r {dir} /cdn', 'darwin')).toBe('cp -r "${REMOTE_DIR}" /cdn');
+        expect(remoteCommand('cp -r "{dir}" /cdn', 'linux')).toBe('cp -r "${REMOTE_DIR}" /cdn');
+        expect(remoteCommand('rsync -a "{dir}/" host:/cdn', 'linux')).toBe('rsync -a "${REMOTE_DIR}/" host:/cdn');
+        expect(remoteCommand("cp -r '{dir}/' /cdn", 'linux')).toBe(`cp -r ''"\${REMOTE_DIR}"'/' /cdn`);
+        expect(remoteCommand('xcopy {dir} D:\\cdn', 'win32')).toBe('xcopy "%REMOTE_DIR%" D:\\cdn');
+        expect(remoteCommand('xcopy "{dir}\\" D:\\cdn', 'win32')).toBe('xcopy "%REMOTE_DIR%\\" D:\\cdn');
+    });
+
+    it.skipIf(process.platform === 'win32')('passes paths with shell metacharacters unchanged', () => {
+        const dir = '/tmp/a b/$HOME/`id`';
+        const result = spawnSync(remoteCommand(`printf '%s|%s|%s' {dir} "{dir}/" '{dir}'`), {
+            shell: true,
+            env: { ...process.env, REMOTE_DIR: dir },
+            encoding: 'utf8',
+        });
+        expect(result.stdout).toBe(`${dir}|${dir}/|${dir}`);
     });
 });

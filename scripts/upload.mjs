@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { loadLocalEnv } from './lib/cocos.mjs';
-import { prepareUpload, uploadDouyin, uploadWechat } from './lib/upload.mjs';
+import { prepareUpload, REMOTE_DIR_ENV, remoteCommand, uploadDouyin, uploadWechat } from './lib/upload.mjs';
 
 const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -31,9 +31,12 @@ if (values['dry-run']) {
 }
 
 if (plan.remote) {
-    const command = plan.remote.command.replaceAll('{dir}', JSON.stringify(plan.remote.dir));
     console.log(`上传 remote：${plan.remote.dir}`);
-    const result = spawnSync(command, { shell: true, stdio: 'inherit' });
+    const result = spawnSync(remoteCommand(plan.remote.command), {
+        shell: true,
+        stdio: 'inherit',
+        env: { ...process.env, [REMOTE_DIR_ENV]: plan.remote.dir },
+    });
     if (result.status !== 0) {
         console.error('✗ remote 上传失败');
         process.exit(1);

@@ -20,8 +20,12 @@ export interface AdServiceOptions {
     ) => void;
 }
 
+export type AdKind = 'rewarded' | 'interstitial';
+export type LateAdListener = (kind: AdKind, placement: string, result: RewardedResult | InterstitialResult) => void;
+
 export class AdService {
     private provider: AdProvider | null = null;
+    private readonly lateListeners: LateAdListener[] = [];
     private units: AdUnits = {};
     private showing = false;
     private showTimeoutMs = AD_SHOW_TIMEOUT_MS;
@@ -51,6 +55,15 @@ export class AdService {
         return this.showing;
     }
 
+    /** 展示超时返回 timeout 之后平台给出的结果；激励视频为 completed 时由业务决定是否补发奖励 */
+    onLateResult(listener: LateAdListener): () => void {
+        this.lateListeners.push(listener);
+        return () => {
+            const index = this.lateListeners.indexOf(listener);
+            if (index >= 0) this.lateListeners.splice(index, 1);
+        };
+    }
+
     async showRewarded(placement: string): Promise<RewardedResult> {
         if (this.simulate) {
             const simulated: RewardedResult =
@@ -59,8 +72,14 @@ export class AdService {
         }
         const blocked = this.precheck(this.units.rewarded, placement);
         if (blocked) return this.emit('rewarded', placement, { result: 'failed', reason: blocked });
-        const result = await this.run(() => this.provider!.showRewarded(this.unitFor(this.units.rewarded, placement)));
-        if (result.result !== 'failed') this.policy.recordRewardedShown();
+        const result = await this.run(
+            () => this.provider!.showRewarded(this.unitFor(this.units.rewarded, placement)),
+            (late) => {
+                if (late.result !== 'failed') this.policy.recordRewardedShown();
+                this.emitLate('rewarded', placement, late);
+            },
+        );
+        if (result.result !== 'failed' || result.reason === 'timeout') this.policy.recordRewardedShown();
         return this.emit('rewarded', placement, result);
     }
 
@@ -75,10 +94,14 @@ export class AdService {
         if (this.policy.interstitialWaitMs() > 0) {
             return this.emit('interstitial', placement, { result: 'failed', reason: 'frequency' });
         }
-        const result = await this.run(() =>
-            this.provider!.showInterstitial(this.unitFor(this.units.interstitial, placement)),
+        const result = await this.run(
+            () => this.provider!.showInterstitial(this.unitFor(this.units.interstitial, placement)),
+            (late) => {
+                if (late.result === 'shown') this.policy.recordInterstitialShown();
+                this.emitLate('interstitial', placement, late);
+            },
         );
-        if (result.result === 'shown') this.policy.recordInterstitialShown();
+        if (result.result === 'shown' || result.reason === 'timeout') this.policy.recordInterstitialShown();
         else this.policy.recordInterstitialError(result.errCode);
         return this.emit('interstitial', placement, result);
     }
@@ -102,17 +125,26 @@ export class AdService {
         return units?.[placement] ?? placement;
     }
 
-    private async run<T extends RewardedResult | InterstitialResult>(show: () => Promise<T>): Promise<T> {
+    private async run<T extends RewardedResult | InterstitialResult>(
+        show: () => Promise<T>,
+        onLate: (result: T) => void,
+    ): Promise<T> {
         this.showing = true;
         this.notifyShowing(true);
         let timer: ReturnType<typeof setTimeout> | undefined;
+        let shown: Promise<T> | null = null;
+        let timedOut = false;
         const limit = this.showTimeoutMs;
         try {
-            const pending = [show()];
+            shown = show();
+            const pending = [shown];
             if (limit > 0 && limit <= MAX_TIMER_MS) {
                 pending.push(
                     new Promise<T>((resolve) => {
-                        timer = setTimeout(() => resolve({ result: 'failed', reason: 'timeout' } as T), limit);
+                        timer = setTimeout(() => {
+                            timedOut = true;
+                            resolve({ result: 'failed', reason: 'timeout' } as T);
+                        }, limit);
                     }),
                 );
             }
@@ -123,6 +155,21 @@ export class AdService {
             clearTimeout(timer);
             this.showing = false;
             this.notifyShowing(false);
+            if (timedOut && shown) {
+                shown
+                    .then(onLate, () => onLate({ result: 'failed', reason: 'show_failed' } as T))
+                    .catch((err) => console.error('[game-core] 广告结果回调异常', err));
+            }
+        }
+    }
+
+    private emitLate(kind: AdKind, placement: string, result: RewardedResult | InterstitialResult) {
+        for (const listener of this.lateListeners.slice()) {
+            try {
+                listener(kind, placement, result);
+            } catch (err) {
+                console.error('[game-core] 广告结果回调异常', err);
+            }
         }
     }
 

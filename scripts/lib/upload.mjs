@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { checkPlatformSize } from '../size-check.mjs';
-import { APPIDS, PLATFORMS, ROOT } from './cocos.mjs';
+import { APPIDS, onInterrupt, PLATFORMS, ROOT } from './cocos.mjs';
 
 export const UPLOAD_ENV = {
     wechat: { credential: 'WECHAT_UPLOAD_KEY', hint: '小程序后台下载的代码上传密钥文件路径' },
@@ -84,6 +84,30 @@ export function prepareUpload(platform, { version, desc, robot = 1 }, env = proc
 }
 
 export const REMOTE_IGNORE = 'remote/**/*';
+export const REMOTE_DIR_ENV = 'REMOTE_DIR';
+
+/** {dir} 替换为对环境变量 REMOTE_DIR 的引用，按所在引号补全引用方式，目录路径不经 shell 解析 */
+export function remoteCommand(command, platform = process.platform) {
+    const windows = platform === 'win32';
+    const name = REMOTE_DIR_ENV;
+    let quote = '';
+    let out = '';
+    for (let i = 0; i < command.length; i++) {
+        if (command.startsWith('{dir}', i)) {
+            if (windows) out += quote === '"' ? `%${name}%` : `"%${name}%"`;
+            else if (quote === '"') out += `\${${name}}`;
+            else if (quote === "'") out += `'"\${${name}}"'`;
+            else out += `"\${${name}}"`;
+            i += 4;
+            continue;
+        }
+        const ch = command[i];
+        if (quote === '' && (ch === '"' || (ch === "'" && !windows))) quote = ch;
+        else if (ch === quote) quote = '';
+        out += ch;
+    }
+    return out;
+}
 
 export async function uploadWechat(plan) {
     const { default: ci } = await import('miniprogram-ci');
@@ -124,6 +148,7 @@ export async function uploadDouyin(plan, loadCli = () => import('tt-ide-cli')) {
     const home = mkdtempSync(join(tmpdir(), 'tma-'));
     const previous = process.env.TMA_CLI_HOME;
     process.env.TMA_CLI_HOME = home;
+    const offInterrupt = onInterrupt(() => rmSync(home, { recursive: true, force: true }));
     try {
         const { default: tma } = await loadCli();
         await tma.setAppConfig({ appid: plan.appid, config: { token: plan.credential } });
@@ -138,6 +163,7 @@ export async function uploadDouyin(plan, loadCli = () => import('tt-ide-cli')) {
     } finally {
         if (previous === undefined) delete process.env.TMA_CLI_HOME;
         else process.env.TMA_CLI_HOME = previous;
+        offInterrupt();
         rmSync(home, { recursive: true, force: true });
     }
 }

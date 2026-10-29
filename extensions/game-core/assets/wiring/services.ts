@@ -134,6 +134,9 @@ export const ads = new AdService({
             errCode: outcome.errCode,
         }),
 });
+ads.onLateResult((kind, placement, outcome) =>
+    track('ad_late_result', { kind, placement, result: outcome.result, reason: outcome.reason }),
+);
 ads.setProvider(platform.ads);
 
 type ShowListener = (options: LaunchOptions) => void;

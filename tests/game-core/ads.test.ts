@@ -206,6 +206,35 @@ describe('AdService', () => {
         expect(ads.isShowing).toBe(false);
     });
 
+    it('reports the platform result that arrives after a timeout', async () => {
+        vi.useFakeTimers();
+        try {
+            const ads = new AdService();
+            const late = vi.fn();
+            ads.onLateResult(late);
+            let finish: (result: RewardedResult) => void = () => undefined;
+            ads.setProvider(
+                provider({
+                    needsUnitId: false,
+                    showRewarded: () => new Promise<RewardedResult>((resolve) => (finish = resolve)),
+                }),
+            );
+            ads.configure({ showTimeoutMs: 1000, policy: { interstitialStartDelayMs: 0 } });
+            const pending = ads.showRewarded('revive');
+            await vi.advanceTimersByTimeAsync(1000);
+            await expect(pending).resolves.toEqual({ result: 'failed', reason: 'timeout' });
+            expect(late).not.toHaveBeenCalled();
+            expect(ads.policy.interstitialWaitMs()).toBe(60000);
+            await vi.advanceTimersByTimeAsync(30000);
+            finish({ result: 'completed' });
+            await vi.advanceTimersByTimeAsync(0);
+            expect(late).toHaveBeenCalledWith('rewarded', 'revive', { result: 'completed' });
+            expect(ads.policy.interstitialWaitMs()).toBe(60000);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('fails with timeout and accepts new ads when the provider never settles', async () => {
         vi.useFakeTimers();
         try {

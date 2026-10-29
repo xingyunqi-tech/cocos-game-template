@@ -78,8 +78,8 @@ export { createLogger, logHub } from './monitor/logger';
 export type { LogLevel, LogRecord, LogSink, Logger } from './monitor/logger';
 export { track, tracker } from './monitor/track';
 export type { TrackEvent, TrackParams, TrackSink } from './monitor/track';
-export { errorReporter, reportError } from './monitor/errors';
-export type { ErrorReport, ErrorSink, ErrorSource } from './monitor/errors';
+export { errorReporter, ErrorThrottle, reportError } from './monitor/errors';
+export type { ErrorReport, ErrorSink, ErrorSource, ErrorThrottleOptions } from './monitor/errors';
 export { HttpClient } from './net/HttpClient';
 export type {
     BusinessResult,
@@ -110,7 +110,7 @@ export type { KeyValueStore } from './save/KeyValueStore';
 export { AdPolicy, DEFAULT_AD_POLICY } from './ads/AdPolicy';
 export type { AdPolicyOptions } from './ads/AdPolicy';
 export { AdService } from './ads/AdService';
-export type { AdServiceOptions, AdUnits } from './ads/AdService';
+export type { AdKind, AdServiceOptions, AdUnits, LateAdListener } from './ads/AdService';
 export { AuthService } from './net/AuthService';
 export type {
     AuthProtocol,

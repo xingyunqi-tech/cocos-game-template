@@ -12,6 +12,10 @@
 - 抖音录屏：停止超时后，下一次录制录满时长自动结束的视频正常保存
 - 启动步骤以 `undefined` 拒绝或抛出时按失败处理
 - `reportError(undefined)` 的 message 为 `'undefined'`
+- `ads.onLateResult(listener)`：广告展示超时返回 `timeout` 之后平台给出的结果，埋点 `ad_late_result`；展示超时按已展示计入频控；新增类型 `AdKind`、`LateAdListener`
+- 错误上报到 `trackPath` 时经过 `ErrorThrottle`：来源、信息与上下文相同的错误 60 秒内只上报一次，每分钟最多 30 条；合并次数（`context.repeated`）与丢弃数（`context.dropped`）随下一次上报或切后台时补报；日志输出不受影响；新增 `ErrorThrottle`、类型 `ErrorThrottleOptions`
+- 上传：`REMOTE_UPLOAD_COMMAND` 中的 `{dir}` 按所在引号替换为对环境变量 `REMOTE_DIR` 的引用；抖音上传被信号中断时删除临时 token 目录；构建与上传被中断时按信号返回退出码（SIGINT 130、SIGTERM 143、SIGHUP 129）
+- 配置表：字段名为 `__proto__`、int 超出安全整数范围、float 溢出时报错
 - 上传检查读取带 md5 后缀的 `src/settings.<hash>.json`；缺少、多个或无法解析时拒绝上传
 
 ## 2.2.0（2026-10-29）

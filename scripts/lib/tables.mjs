@@ -12,6 +12,7 @@ export const FIELD_TYPES = {
 };
 
 const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const RESERVED = '__proto__';
 
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 
@@ -53,7 +54,10 @@ function parseValue(raw, type, where) {
         case 'float': {
             if (text === '') return 0;
             if (!(type === 'int' ? INT : FLOAT).test(text)) throw new Error(`${where} 不是合法的 ${type}：${text}`);
-            return Number(text);
+            const value = Number(text);
+            if (type === 'int' && !Number.isSafeInteger(value)) throw new Error(`${where} 超出安全整数范围：${text}`);
+            if (!Number.isFinite(value)) throw new Error(`${where} 超出数值范围：${text}`);
+            return value;
         }
         case 'bool':
             if (text === '') return false;
@@ -88,7 +92,7 @@ export function convertSheet(name, rows) {
     header.forEach((cell, col) => {
         const field = readCell(cell, `${name} 第 ${col + 1} 列字段名`);
         if (!field || field.startsWith('#')) return;
-        if (!NAME.test(field)) throw new Error(`${name} 第 ${col + 1} 列字段名 ${field} 不合法`);
+        if (!NAME.test(field) || field === RESERVED) throw new Error(`${name} 第 ${col + 1} 列字段名 ${field} 不合法`);
         if (fields.some((f) => f.name === field)) throw new Error(`${name} 字段 ${field} 重复`);
         const type = readCell(types[col], `${name}.${field} 类型`);
         if (!(type in FIELD_TYPES)) throw new Error(`${name}.${field} 类型 ${type || '（空）'} 不支持`);

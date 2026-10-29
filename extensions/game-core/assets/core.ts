@@ -6,7 +6,7 @@ import type { IConfigEnvironment } from 'db://oops-framework/module/config/GameC
 import { gameConfigData, getEnv } from './config/env';
 import { Tables } from './config/Tables';
 import { installGmButton } from './debug/GmPanel';
-import { errorReporter, reportError } from './monitor/errors';
+import { errorReporter, ErrorThrottle, reportError } from './monitor/errors';
 import { createLogger, logHub } from './monitor/logger';
 import { track, tracker } from './monitor/track';
 import { isPermanentUploadError, TrackUploader } from './monitor/TrackUploader';
@@ -187,14 +187,18 @@ function setupCore(env: IConfigEnvironment) {
             isPermanent: isPermanentUploadError,
         });
         tracker.addSink((event) => uploader.push(event));
-        errorReporter.addSink((report) =>
+        const errors = new ErrorThrottle((report) =>
             uploader.push({
                 event: 'error',
                 params: { ...report.context, source: report.source, message: report.message, stack: report.stack },
                 time: report.time,
             }),
         );
-        lifecycle.onHide(() => void uploader.flushAll());
+        errorReporter.addSink(errors.push);
+        lifecycle.onHide(() => {
+            errors.flush();
+            void uploader.flushAll();
+        });
     }
 
     lifecycle.bind(oops.message, EventMessage.GAME_SHOW, EventMessage.GAME_HIDE);

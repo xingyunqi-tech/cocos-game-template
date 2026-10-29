@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Lifecycle, UserReady } from 'db://game-core/boot/Lifecycle';
 import { RemoteConfig, type RemoteSettingsMap } from 'db://game-core/config/RemoteConfig';
-import { ErrorReporter, installWebErrorHooks, type ErrorSink } from 'db://game-core/monitor/errors';
+import {
+    ErrorReporter,
+    ErrorThrottle,
+    installWebErrorHooks,
+    type ErrorReport,
+    type ErrorSink,
+} from 'db://game-core/monitor/errors';
 import { LogHub, type LogSink } from 'db://game-core/monitor/logger';
 import { Tracker } from 'db://game-core/monitor/track';
 
@@ -38,6 +44,53 @@ describe('Tracker', () => {
         tracker.setCommonParams({ version: '1.0' });
         tracker.track('start', { step: 'a' });
         expect(sink.mock.calls[0][0]).toMatchObject({ event: 'start', params: { version: '1.0', step: 'a' } });
+    });
+});
+
+describe('ErrorThrottle', () => {
+    const report = (message: string, context: Record<string, unknown> = {}): ErrorReport => ({
+        source: 'global',
+        message,
+        context,
+        time: 0,
+    });
+
+    it('merges identical errors within the dedupe window and forwards the merged count afterwards', () => {
+        let now = 0;
+        const sink = vi.fn();
+        const throttle = new ErrorThrottle(sink, { dedupeMs: 1000, now: () => now });
+        for (let i = 0; i < 5; i++) throttle.push(report('frame', { url: '/a' }));
+        throttle.push(report('frame', { url: '/b' }));
+        expect(sink).toHaveBeenCalledTimes(2);
+        now = 1000;
+        throttle.push(report('frame', { url: '/a' }));
+        expect(sink.mock.calls[2][0]).toMatchObject({ message: 'frame', context: { url: '/a', repeated: 4 } });
+    });
+
+    it('forwards pending merged and dropped counts on flush', () => {
+        const sink = vi.fn();
+        const throttle = new ErrorThrottle(sink, { maxPerMinute: 2, now: () => 0 });
+        throttle.push(report('a'));
+        throttle.push(report('a'));
+        throttle.push(report('b'));
+        throttle.push(report('c'));
+        throttle.push(report('d'));
+        expect(sink).toHaveBeenCalledTimes(2);
+        throttle.flush();
+        expect(sink.mock.calls.slice(2).map((c) => (c[0] as ErrorReport).context)).toEqual([
+            { repeated: 1, dropped: 2 },
+        ]);
+        throttle.flush();
+        expect(sink).toHaveBeenCalledTimes(3);
+    });
+
+    it('forwards a summary when only dropped reports are pending', () => {
+        const sink = vi.fn();
+        const throttle = new ErrorThrottle(sink, { maxPerMinute: 1, now: () => 0 });
+        throttle.push(report('a'));
+        throttle.push(report('b'));
+        throttle.flush();
+        expect(sink.mock.calls[1][0]).toMatchObject({ message: '错误上报超过频率上限', context: { dropped: 1 } });
     });
 });
 
