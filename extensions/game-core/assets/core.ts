@@ -2,6 +2,7 @@ import { JsonAsset, resources } from 'cc';
 import { DEBUG, HTML5, MINIGAME } from 'cc/env';
 import { EventMessage } from 'db://oops-framework/core/common/event/EventMessage';
 import { oops } from 'db://oops-framework/core/Oops';
+import type { IConfigEnvironment } from 'db://oops-framework/module/config/GameConfig';
 import { gameConfigData, getEnv } from './config/env';
 import { Tables } from './config/Tables';
 import { installGmButton } from './debug/GmPanel';
@@ -112,6 +113,7 @@ export async function runGameEntry(): Promise<boolean> {
 }
 
 let initialized = false;
+let initFailure: Error | null = null;
 let customTransport: HttpTransport | null = null;
 
 export interface CoreConfig {
@@ -131,14 +133,26 @@ export function configureCore(config: CoreConfig) {
     if (config.transport) customTransport = config.transport;
 }
 
+/** 配置无效或初始化抛错时抛出；初始化中途失败后再次调用抛出同一错误 */
 export function initGameCore() {
+    if (initFailure !== null) throw initFailure;
     if (initialized) return;
-    initialized = true;
 
     const override = DEBUG ? gmSlot.get().env : '';
     if (override && override in gameConfigData().config)
         oops.config.game.setConfigType(override as Parameters<typeof oops.config.game.setConfigType>[0]);
     const env = getEnv();
+    if (!env) throw new Error(`config.json 的 type「${gameConfigData().type}」没有对应的环境配置`);
+    initialized = true;
+    try {
+        setupCore(env);
+    } catch (err) {
+        initFailure = err instanceof Error ? err : new Error(String(err));
+        throw initFailure;
+    }
+}
+
+function setupCore(env: IConfigEnvironment) {
     logHub.setLevel(env.logLevel ?? (DEBUG ? 'debug' : 'warn'));
     errorReporter.addSink((report) => log.error(`[${report.source}] ${report.message}`, report.context));
     platform.installErrorHooks(errorReporter);

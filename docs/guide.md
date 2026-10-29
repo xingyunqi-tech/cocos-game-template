@@ -103,7 +103,7 @@ bootPipeline.register(
 
 ## 7. 内购接口
 
-`payment.pay({ productId, price })` 返回 `{ result: 'success' | 'failed' | 'pending', orderId?, reason? }`，`reason` 为 `unsupported`、`not_logged_in`、`cancelled`、`order_failed`、`pay_failed`、`busy`、`timeout`。平台 120 秒未回调时返回 `pending`（`reason: 'timeout'`）；`pending` 订单与登录后补单用 `payment.queryOrder(orderId)` 查询（实现 `IPayment.queryOrder`）。微信虚拟支付所需的 `signData`、`paySig`、`signature` 由服务端生成，经 `PayItem.extra` 传入实现。模板只定义接口，三端默认返回 `unsupported`；GM 面板可模拟成功或失败。
+`payment.pay({ productId, price })` 返回 `{ result: 'success' | 'failed' | 'pending', orderId?, reason? }`，`reason` 为 `unsupported`、`not_logged_in`、`cancelled`、`order_failed`、`pay_failed`、`busy`、`timeout`。平台 120 秒未回调时返回 `pending`（`reason: 'timeout'`），实现在服务端创建订单后调用 `pay(item, hooks)` 的 `hooks.onOrder(orderId)` 时，该结果带上 `orderId`；之后平台给出的结果通过 `payment.onLateResult((item, result) => …)` 回调（埋点 `pay_late_result`）。超时后即可发起下一笔支付，界面应提示用户支付结果待确认，避免重复购买。`pending` 订单与登录后补单用 `payment.queryOrder(orderId)` 查询（实现 `IPayment.queryOrder`）。微信虚拟支付所需的 `signData`、`paySig`、`signature` 由服务端生成，经 `PayItem.extra` 传入实现。模板只定义接口，三端默认返回 `unsupported`；GM 面板可模拟成功或失败。
 
 接入真实支付时实现 `IPayment` 并 `payment.setImplementation(impl)`。约定：客户端请求服务端创建订单 → 服务端返回平台支付参数 → 客户端调起平台支付（微信 iOS `wx.requestVirtualPayment`，抖音 Android `tt.requestGamePayment`，iOS 钻石兑换，实施前按平台最新规则核实）→ 平台回调服务端 → 服务端发货；客户端只以服务端订单状态为准，不在客户端发货。
 

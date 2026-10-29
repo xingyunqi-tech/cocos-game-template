@@ -1,5 +1,12 @@
 # game-core 变更记录
 
+## 2.2.1
+
+- `IPayment.pay(item, hooks?)`：实现在服务端订单创建后调用 `hooks.onOrder(orderId)`，平台超时返回的 `pending` 结果带上该 `orderId`；`payment.onLateResult(listener)` 回调超时之后平台给出的结果（实现报告过订单号时带上该订单号），埋点事件为 `pay_late_result`；新增类型 `PayHooks`、`LatePayListener`
+- `initGameCore`：`config.json` 的 `type` 没有对应环境配置时抛错；初始化中途抛错后再次调用抛出同一错误
+- `GameRoot`：`initGameCore` 抛错时上报错误并显示 `coreText.initFailed`（“启动失败，请重新打开游戏”）
+- 上传检查读取带 md5 后缀的 `src/settings.<hash>.json`；缺少、多个或无法解析时拒绝上传
+
 ## 2.2.0（2026-10-29）
 
 - `DailyCounter` / `createDailyCounter(key)`：按天计数与上限（`uses`、`remaining`、`record`、`tryUse`），跨天清零，日期回拨时沿用已记录的计数

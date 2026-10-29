@@ -6,14 +6,18 @@ import { excludeRemoteForDouyin, prepareUpload, uploadDouyin } from '../../scrip
 
 let dirs = [];
 
-function project(platformDir, appid, { remote = false, debug = false, server = '' } = {}) {
+function project(
+    platformDir,
+    appid,
+    { remote = false, debug = false, server = '', settings = 'settings.7b518.json' } = {},
+) {
     const root = mkdtempSync(join(tmpdir(), 'upload-'));
     dirs.push(root);
     const dir = join(root, 'build', platformDir);
     mkdirSync(join(dir, 'src'), { recursive: true });
     writeFileSync(join(dir, 'project.config.json'), JSON.stringify({ appid }));
     writeFileSync(join(dir, 'game.json'), '{}');
-    writeFileSync(join(dir, 'src', 'settings.json'), JSON.stringify({ engine: { debug }, assets: { server } }));
+    if (settings) writeFileSync(join(dir, 'src', settings), JSON.stringify({ engine: { debug }, assets: { server } }));
     if (remote) mkdirSync(join(dir, 'remote'));
     const key = join(root, 'private.key');
     writeFileSync(key, 'key');
@@ -82,6 +86,23 @@ describe('upload safeguards', () => {
     it('rejects debug builds and invalid robot numbers', () => {
         const { root } = project('bytedance-mini-game', 'tt1', { debug: true });
         expect(() => prepareUpload('douyin', { ...args, robot: 31 }, env, root)).toThrow(/--robot[\s\S]*调试包/);
+        const plain = project('bytedance-mini-game', 'tt1', { debug: true, settings: 'settings.json' });
+        expect(() => prepareUpload('douyin', args, env, plain.root)).toThrow('调试包');
+    });
+
+    it('rejects builds without a settings file', () => {
+        const { root } = project('bytedance-mini-game', 'tt1', { settings: '' });
+        expect(() => prepareUpload('douyin', args, env, root)).toThrow('缺少 src/settings');
+    });
+
+    it('rejects builds with several or unparsable settings files', () => {
+        const { root } = project('bytedance-mini-game', 'tt1');
+        const src = join(root, 'build', 'bytedance-mini-game', 'src');
+        writeFileSync(join(src, 'settings.1a2b3.json'), '{}');
+        expect(() => prepareUpload('douyin', args, env, root)).toThrow('多个 settings 文件');
+        const broken = project('bytedance-mini-game', 'tt1', { settings: '' });
+        writeFileSync(join(broken.root, 'build', 'bytedance-mini-game', 'src', 'settings.abc12.json'), '');
+        expect(() => prepareUpload('douyin', args, env, broken.root)).toThrow('settings.abc12.json 无法解析');
     });
 
     it('excludes remote assets from the douyin package once', () => {

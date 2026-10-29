@@ -20,10 +20,15 @@ export interface PayResult {
     errCode?: number;
 }
 
+export interface PayHooks {
+    /** 服务端订单创建后调用，超时返回的 pending 结果带上该订单号 */
+    onOrder(orderId: string): void;
+}
+
 /** 发货流程：客户端 pay → 服务端创建订单并调起平台支付 → 平台回调服务端 → 服务端发货 → 客户端查询订单或收到推送 */
 export interface IPayment {
     readonly supported: boolean;
-    pay(item: PayItem): Promise<PayResult>;
+    pay(item: PayItem, hooks?: PayHooks): Promise<PayResult>;
     /** 查询订单状态，用于 pending 订单与登录后补单 */
     queryOrder?(orderId: string): Promise<PayResult>;
 }

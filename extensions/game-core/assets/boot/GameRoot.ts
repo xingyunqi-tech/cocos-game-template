@@ -28,7 +28,7 @@ function loadConfig(): Promise<JsonAsset> {
 
 @ccclass('GameRoot')
 export class GameRoot extends Root {
-    private stage: 'config' | 'pipeline' | 'entry' | 'done' = 'config';
+    private stage: 'config' | 'init' | 'pipeline' | 'entry' | 'done' = 'config';
     private busy = false;
     private fallback: Label | null = null;
 
@@ -38,8 +38,7 @@ export class GameRoot extends Root {
     }
 
     protected run() {
-        initGameCore();
-        this.stage = 'pipeline';
+        this.stage = 'init';
         this.busy = false;
         void this.attempt();
     }
@@ -49,6 +48,7 @@ export class GameRoot extends Root {
         this.busy = true;
         if (this.fallback) this.fallback.string = coreText.loading;
         if (this.stage === 'config') await this.loadConfigStage();
+        else if (this.stage === 'init') await this.initStage();
         else if (this.stage === 'pipeline') await this.pipelineStage();
         else await this.entryStage();
     }
@@ -64,6 +64,20 @@ export class GameRoot extends Root {
         }
         this.hideFallback();
         super.onLoad();
+    }
+
+    private async initStage() {
+        try {
+            initGameCore();
+        } catch (err) {
+            console.error('[game-core] 初始化失败', err);
+            reportError(err, 'boot', { step: 'init' });
+            this.busy = false;
+            this.showFallback(coreText.initFailed);
+            return;
+        }
+        this.stage = 'pipeline';
+        await this.pipelineStage();
     }
 
     private async pipelineStage() {

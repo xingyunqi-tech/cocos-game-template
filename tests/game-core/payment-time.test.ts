@@ -53,6 +53,59 @@ describe('PaymentService timeout and query', () => {
         }
     });
 
+    it('includes the created order id in the timeout result and in the late platform result', async () => {
+        vi.useFakeTimers();
+        try {
+            const onResult = vi.fn();
+            const late = vi.fn();
+            const service = new PaymentService(onResult, 1000);
+            service.onLateResult(late);
+            let finish: (result: PayResult) => void = () => undefined;
+            service.setImplementation({
+                supported: true,
+                pay: (_item, hooks) => {
+                    hooks?.onOrder('o9');
+                    return new Promise<PayResult>((r) => (finish = r));
+                },
+            });
+            const pending = service.pay(item);
+            vi.advanceTimersByTime(1000);
+            await expect(pending).resolves.toEqual({ result: 'pending', reason: 'timeout', orderId: 'o9' });
+            expect(late).not.toHaveBeenCalled();
+            finish({ result: 'failed', reason: 'cancelled' });
+            await vi.waitFor(() =>
+                expect(late).toHaveBeenCalledWith(item, { result: 'failed', reason: 'cancelled', orderId: 'o9' }),
+            );
+            expect(onResult).toHaveBeenCalledTimes(1);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('does not report late results for payments that finish in time', async () => {
+        const late = vi.fn();
+        const service = new PaymentService(undefined, 1000);
+        service.onLateResult(late);
+        service.setImplementation({
+            supported: true,
+            pay: () => Promise.resolve({ result: 'success', orderId: 'o1' }),
+        });
+        await expect(service.pay(item)).resolves.toEqual({ result: 'success', orderId: 'o1' });
+        await Promise.resolve();
+        expect(late).not.toHaveBeenCalled();
+    });
+
+    it('reports a synchronous implementation error as pay_failed', async () => {
+        const service = new PaymentService();
+        service.setImplementation({
+            supported: true,
+            pay: () => {
+                throw new Error('boom');
+            },
+        });
+        await expect(service.pay(item)).resolves.toEqual({ result: 'failed', reason: 'pay_failed' });
+    });
+
     it('queries orders through the implementation', async () => {
         const service = new PaymentService();
         await expect(service.queryOrder('o1')).resolves.toEqual({

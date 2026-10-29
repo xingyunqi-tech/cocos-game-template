@@ -53,6 +53,15 @@ http.useResponse((response) => {
 export const payment = new PaymentService((item, result) =>
     track('pay_result', { productId: item.productId, price: item.price, result: result.result, reason: result.reason }),
 );
+payment.onLateResult((item, result) =>
+    track('pay_late_result', {
+        productId: item.productId,
+        price: item.price,
+        orderId: result.orderId,
+        result: result.result,
+        reason: result.reason,
+    }),
+);
 export const deviceSave = new SaveStore({ store: localStore, prefix: 'gc:d', onWarn: saveWarn });
 export const userSave = new SaveStore({ store: localStore, prefix: 'gc:u', requireScope: true, onWarn: saveWarn });
 export const remoteConfig = new RemoteConfig<RemoteSettingsMap>({ reviewMode: false, shareReward: false });

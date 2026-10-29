@@ -3,6 +3,7 @@ export const coreText = {
     loading: '加载中…',
     configFailed: '配置加载失败，点击重试',
     bootFailed: '启动失败，点击重试',
+    initFailed: '启动失败，请重新打开游戏',
     healthTitle: '健康游戏忠告',
     ageRating: '适龄提示',
     music: '音乐',

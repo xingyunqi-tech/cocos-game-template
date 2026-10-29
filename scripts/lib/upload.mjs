@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { checkPlatformSize } from '../size-check.mjs';
@@ -10,6 +10,26 @@ export const UPLOAD_ENV = {
 };
 
 const VERSION = /^\d+\.\d+\.\d+$/;
+const SETTINGS_FILE = /^settings(\.[0-9a-f]+)?\.json$/;
+
+function readSettings(projectPath, errors) {
+    const dir = join(projectPath, 'src');
+    const names = existsSync(dir) ? readdirSync(dir).filter((file) => SETTINGS_FILE.test(file)) : [];
+    if (names.length === 0) {
+        errors.push('构建产物缺少 src/settings*.json，请重新构建');
+        return null;
+    }
+    if (names.length > 1) {
+        errors.push(`构建产物 src/ 下有多个 settings 文件（${names.join('、')}），请清理后重新构建`);
+        return null;
+    }
+    try {
+        return JSON.parse(readFileSync(join(dir, names[0]), 'utf8'));
+    } catch {
+        errors.push(`构建产物 src/${names[0]} 无法解析，请重新构建`);
+        return null;
+    }
+}
 
 export function prepareUpload(platform, { version, desc, robot = 1 }, env = process.env, root = ROOT) {
     const target = PLATFORMS[platform];
@@ -36,8 +56,7 @@ export function prepareUpload(platform, { version, desc, robot = 1 }, env = proc
         else if (appid && built !== appid)
             errors.push(`构建产物 AppID ${built} 与 ${APPIDS[platform].env}=${appid} 不一致，请重新构建`);
     }
-    const settingsFile = join(projectPath, 'src', 'settings.json');
-    const settings = existsSync(settingsFile) ? JSON.parse(readFileSync(settingsFile, 'utf8')) : null;
+    const settings = existsSync(projectPath) ? readSettings(projectPath, errors) : null;
     if (settings?.engine?.debug) errors.push('构建产物是调试包，请去掉 --debug 重新构建');
     const remoteDir = join(projectPath, 'remote');
     const hasRemote = existsSync(remoteDir);
