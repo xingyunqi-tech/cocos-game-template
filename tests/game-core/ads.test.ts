@@ -175,6 +175,37 @@ describe('AdService', () => {
         }
     });
 
+    it('preloads configured rewarded placements and reports platform showing state', async () => {
+        const preloadRewarded = vi.fn();
+        const showing: boolean[] = [];
+        const ads = new AdService({ onShowingChange: (value) => showing.push(value) });
+        ads.setProvider(provider({ preloadRewarded }));
+        ads.configure({ rewarded: { revive: 'unit-r' } });
+        ads.preloadRewarded('revive');
+        ads.preloadRewarded('unknown');
+        expect(preloadRewarded.mock.calls).toEqual([['unit-r']]);
+        await ads.showRewarded('revive');
+        ads.simulate = 'completed';
+        await ads.showRewarded('revive');
+        expect(showing).toEqual([true, false]);
+    });
+
+    it('reports the end of showing and accepts new ads when the provider throws synchronously', async () => {
+        const showing: boolean[] = [];
+        const ads = new AdService({ onShowingChange: (value) => showing.push(value) });
+        ads.setProvider(
+            provider({
+                needsUnitId: false,
+                showRewarded: () => {
+                    throw new Error('sdk missing');
+                },
+            }),
+        );
+        await expect(ads.showRewarded('x')).resolves.toEqual({ result: 'failed', reason: 'show_failed' });
+        expect(showing).toEqual([true, false]);
+        expect(ads.isShowing).toBe(false);
+    });
+
     it('fails with timeout and accepts new ads when the provider never settles', async () => {
         vi.useFakeTimers();
         try {

@@ -11,6 +11,7 @@ interface SetupOptions {
     loginError?: Record<string, unknown>;
     loginHangs?: boolean;
     fallback?: LoginFallback;
+    now?: () => number;
 }
 
 function setup(options: SetupOptions = {}) {
@@ -52,7 +53,7 @@ function setup(options: SetupOptions = {}) {
         onRecovered,
         fallback: options.fallback ?? 'last-user',
         platformLoginTimeoutMs: 20,
-        now: () => 1000,
+        now: options.now ?? (() => 1000),
     });
     http.configure({ tokenProvider: auth });
     return {
@@ -149,6 +150,82 @@ describe('AuthService protocol hooks', () => {
             },
         });
         await expect(s.auth.login()).rejects.toMatchObject({ kind: 'parse', message: '响应解析失败：bad shape' });
+    });
+});
+
+describe('AuthService proactive refresh', () => {
+    it('refreshes before a request when the token is about to expire', async () => {
+        let now = 0;
+        const s = setup({ now: () => now });
+        s.mock.on('POST', '/auth/login', () => ({
+            body: { token: 'old', refreshToken: 'r', userId: 'u', expiresIn: 3600 },
+        }));
+        let refreshes = 0;
+        s.mock.on('POST', '/auth/refresh', () => {
+            refreshes++;
+            return { body: { token: 'new', expiresIn: 3600 } };
+        });
+        const seen: string[] = [];
+        s.mock.on('GET', '/me', ({ headers }) => (seen.push(headers.Authorization), { body: {} }));
+        await s.auth.login();
+        expect(s.auth.shouldRefresh()).toBe(false);
+        await s.http.get('me');
+        now = 3600 * 1000 - 59000;
+        expect(s.auth.shouldRefresh()).toBe(true);
+        await s.http.get('me');
+        expect(seen).toEqual(['Bearer old', 'Bearer new']);
+        expect(refreshes).toBe(1);
+    });
+
+    it('uses half of a short token lifetime as the refresh window', async () => {
+        let now = 0;
+        const s = setup({ now: () => now });
+        s.mock.on('POST', '/auth/login', () => ({
+            body: { token: 'old', refreshToken: 'r', userId: 'u', expiresIn: 30 },
+        }));
+        await s.auth.login();
+        now = 14999;
+        expect(s.auth.shouldRefresh()).toBe(false);
+        now = 15000;
+        expect(s.auth.shouldRefresh()).toBe(true);
+        s.auth.configure({ refreshAheadMs: 0 });
+        expect(s.auth.shouldRefresh()).toBe(false);
+    });
+
+    it('keeps a still valid session when a proactive refresh fails and waits 30 seconds to retry', async () => {
+        let now = 0;
+        const s = setup({ now: () => now });
+        s.mock.on('POST', '/auth/login', () => ({
+            body: { token: 'old', refreshToken: 'r', userId: 'u', expiresIn: 3600 },
+        }));
+        s.mock.on('POST', '/auth/refresh', () => ({ status: 400 }));
+        await s.auth.login();
+        now = 3600 * 1000 - 30000;
+        await expect(s.auth.refresh('expiring')).resolves.toBeNull();
+        expect(s.auth.getToken()).toBe('old');
+        expect(s.auth.shouldRefresh()).toBe(false);
+        now += 30000;
+        expect(s.auth.shouldRefresh()).toBe(true);
+    });
+
+    it('does not refresh proactively for requests that skip refresh, nor without an expiry', async () => {
+        let now = 0;
+        const s = setup({ now: () => now });
+        s.mock.on('POST', '/auth/login', () => ({
+            body: { token: 'old', refreshToken: 'r', userId: 'u', expiresIn: 100 },
+        }));
+        let refreshes = 0;
+        s.mock.on('POST', '/auth/refresh', () => (refreshes++, { body: { token: 'new', expiresIn: 100 } }));
+        s.mock.on('POST', '/track', () => ({ body: {} }));
+        await s.auth.login();
+        now = 90000;
+        await s.http.post('track', {}, { skipRefresh: true });
+        expect(refreshes).toBe(0);
+
+        s.mock.on('POST', '/auth/login', () => ({ body: { token: 't', refreshToken: 'r', userId: 'u' } }));
+        await s.auth.login();
+        expect(s.auth.session?.expiresAt).toBe(0);
+        expect(s.auth.shouldRefresh()).toBe(false);
     });
 });
 

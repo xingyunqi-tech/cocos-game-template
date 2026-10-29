@@ -99,6 +99,7 @@ bootPipeline.register(
 - 模板按钮的点击音效：`coreOptions.clickSound = { bundle: 'demo', path: 'audio/click' }`；音效所在 Bundle 加载完成前的点击（如启动阶段的弹窗）不会立即出声，需要启动阶段即有点击音效时把音效放在 `resources` 并使用 `{ bundle: 'resources', path }`
 - 开关与音量由 `oops.audio` 管理并持久化（设备级），设置面板直接读写；关闭时 `playEffect` 不播放，重新打开音乐时恢复播放
 - 切后台、回前台由 oops Root 暂停与恢复
+- 平台广告展示期间暂停正在播放的背景音乐，结束后恢复；`coreOptions.pauseMusicDuringAds = false` 关闭
 
 ## 7. 内购接口
 
@@ -133,10 +134,10 @@ bootPipeline.register(
 | --- | --- | --- | --- |
 | 登录 | 设备 ID 匿名登录 | `wx.login` code | `tt.login` code / anonymousCode |
 | 分享结果 | `navigator.share` 成功/失败 | 固定 `unknown` | 成功/失败 |
-| 激励视频、插屏 | 调试构建模拟成功，发布构建 `unsupported` | 实例按广告单元缓存 | 插屏展示后销毁重建 |
+| 激励视频、插屏 | 调试构建模拟成功，发布构建 `unsupported` | 实例按广告单元缓存；`ads.preloadRewarded(placement)` 提前加载激励视频 | 插屏展示后销毁重建；预加载同微信 |
 | 侧边栏 | 不支持 | 不支持 | `tt.checkScene` / `tt.navigateToScene`，必接 |
 | 录屏分享 | 不支持 | 不支持 | `platform.recorder`，时长 3 到 300 秒 |
-| 隐私 | 无平台弹窗，用协议页 | `getPrivacySetting`、官方或自定义弹窗 | 仅 `onNeedPrivacyAuthorization`（基础库 4.17.0 起） |
+| 隐私 | 无平台弹窗，用协议页 | `getPrivacySetting`、官方或自定义弹窗；`privacy.require()` 主动弹出（`wx.requirePrivacyAuthorize`） | 仅 `onNeedPrivacyAuthorization`（基础库 4.17.0 起）；`privacy.require()` 直接返回 true |
 | 顶部避让 | 默认 20 | 安全区 + 胶囊 | 安全区 + `getMenuButtonLayout` |
 | 版本更新 | 无 | UpdateManager | UpdateManager |
 

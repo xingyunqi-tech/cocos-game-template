@@ -1,4 +1,4 @@
-import { AudioClip } from 'cc';
+import { AudioClip, AudioSource } from 'cc';
 import { oops } from 'db://oops-framework/core/Oops';
 import { loadAsset } from '../config/Bundles';
 
@@ -15,6 +15,7 @@ export class SoundService {
     private failedAt: Record<string, number> = {};
     private lastMusic: { ref: SoundRef; loop: boolean } | null = null;
     private musicRequest = 0;
+    private pausedForAd: number | null = null;
 
     clip(ref: SoundRef): Promise<AudioClip | null> {
         const key = `${ref.bundle}:${ref.path}`;
@@ -57,6 +58,23 @@ export class SoundService {
         this.lastMusic = null;
         this.musicRequest++;
         oops.audio?.music?.stop();
+    }
+
+    /** 暂停正在播放的背景音乐，供广告展示期间使用 */
+    pauseForAd() {
+        const music = oops.audio?.music;
+        if (!music?.getComponent(AudioSource)?.playing) return;
+        music.pause();
+        this.pausedForAd = this.musicRequest;
+    }
+
+    /** 恢复 pauseForAd 暂停的音乐；期间播放了其他音乐、停止了音乐或关闭了音乐开关时不恢复 */
+    resumeAfterAd() {
+        const request = this.pausedForAd;
+        this.pausedForAd = null;
+        const music = oops.audio?.music;
+        if (request === null || request !== this.musicRequest || !this.lastMusic || !music?.getSwitch()) return;
+        music.resume();
     }
 
     /** 丢弃该 Bundle 的音频缓存并归还引用；当前背景音乐来自该 Bundle 时停止播放 */

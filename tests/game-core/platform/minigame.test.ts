@@ -257,6 +257,21 @@ describe('WechatPlatform', () => {
     });
 });
 
+describe('WechatPlatform privacy authorization', () => {
+    it('requires authorization through wx.requirePrivacyAuthorize', async () => {
+        let ok = true;
+        const requirePrivacyAuthorize = vi.fn((o: { success: () => void; fail: (e: unknown) => void }) =>
+            ok ? o.success() : o.fail({ errMsg: 'requirePrivacyAuthorize:fail' }),
+        );
+        const { platform } = wechat({ requirePrivacyAuthorize });
+        await expect(platform.requirePrivacyAuthorize()).resolves.toBe(true);
+        ok = false;
+        await expect(platform.requirePrivacyAuthorize()).resolves.toBe(false);
+        const old = wechat().platform;
+        await expect(old.requirePrivacyAuthorize()).resolves.toBe(true);
+    });
+});
+
 describe('DouyinPlatform', () => {
     it('uses getMenuButtonLayout for the capsule rect', () => {
         const { platform } = douyin({
@@ -332,6 +347,20 @@ describe('MiniGameAdProvider', () => {
         await expect(second).resolves.toEqual({ result: 'skipped' });
         expect(api.createRewardedVideoAd).toHaveBeenCalledTimes(1);
         expect(ads[0].listeners.close).toHaveLength(0);
+    });
+
+    it('preloads a rewarded ad once and reuses it when shown', async () => {
+        const { api, ads } = fakeApi();
+        const provider = new MiniGameAdProvider(asApi(api), { recreateInterstitialAfterShow: false });
+        provider.preloadRewarded('u1');
+        provider.preloadRewarded('u1');
+        expect(api.createRewardedVideoAd).toHaveBeenCalledTimes(1);
+        expect(ads[0].loadCalls).toBe(1);
+        const pending = provider.showRewarded('u1');
+        await flush();
+        ads[0].close({ isEnded: true });
+        await expect(pending).resolves.toEqual({ result: 'completed' });
+        expect(api.createRewardedVideoAd).toHaveBeenCalledTimes(1);
     });
 
     it('treats a missing close result as completed', async () => {

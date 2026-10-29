@@ -36,6 +36,13 @@ export class PrivacyFlow {
         return registered;
     }
 
+    /** 主动触发隐私授权（如启动后、进入需要隐私接口的功能前）：需要授权时弹出隐私弹窗，返回是否已授权；平台没有该接口时返回 true */
+    require(): Promise<boolean> {
+        const platform = this.options.platform();
+        if (!platform.requirePrivacyAuthorize) return Promise.resolve(true);
+        return platform.requirePrivacyAuthorize().catch(() => false);
+    }
+
     needAuthorization(): Promise<boolean> {
         return this.options
             .platform()

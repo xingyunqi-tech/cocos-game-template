@@ -11,6 +11,8 @@ const MAX_TIMER_MS = 2 ** 31 - 1;
 
 export interface AdServiceOptions {
     policy?: AdPolicy;
+    /** 平台广告开始展示（true）与结束（false）时回调，模拟结果不触发 */
+    onShowingChange?: (showing: boolean) => void;
     onResult?: (
         kind: 'rewarded' | 'interstitial',
         placement: string,
@@ -81,6 +83,14 @@ export class AdService {
         return this.emit('interstitial', placement, result);
     }
 
+    /** 提前加载该广告位的激励视频；未配置广告单元或平台不支持时忽略 */
+    preloadRewarded(placement: string) {
+        const provider = this.provider;
+        if (!provider?.preloadRewarded) return;
+        if (provider.needsUnitId && !this.units.rewarded?.[placement]) return;
+        provider.preloadRewarded(this.unitFor(this.units.rewarded, placement));
+    }
+
     private precheck(units: Record<string, string> | undefined, placement: string) {
         if (!this.provider) return 'unsupported' as const;
         if (this.showing) return 'busy' as const;
@@ -94,23 +104,33 @@ export class AdService {
 
     private async run<T extends RewardedResult | InterstitialResult>(show: () => Promise<T>): Promise<T> {
         this.showing = true;
+        this.notifyShowing(true);
         let timer: ReturnType<typeof setTimeout> | undefined;
         const limit = this.showTimeoutMs;
-        const pending = [show()];
-        if (limit > 0 && limit <= MAX_TIMER_MS) {
-            pending.push(
-                new Promise<T>((resolve) => {
-                    timer = setTimeout(() => resolve({ result: 'failed', reason: 'timeout' } as T), limit);
-                }),
-            );
-        }
         try {
+            const pending = [show()];
+            if (limit > 0 && limit <= MAX_TIMER_MS) {
+                pending.push(
+                    new Promise<T>((resolve) => {
+                        timer = setTimeout(() => resolve({ result: 'failed', reason: 'timeout' } as T), limit);
+                    }),
+                );
+            }
             return await Promise.race(pending);
         } catch {
             return { result: 'failed', reason: 'show_failed' } as T;
         } finally {
             clearTimeout(timer);
             this.showing = false;
+            this.notifyShowing(false);
+        }
+    }
+
+    private notifyShowing(showing: boolean) {
+        try {
+            this.options.onShowingChange?.(showing);
+        } catch (err) {
+            console.error('[game-core] 广告展示回调异常', err);
         }
     }
 

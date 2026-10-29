@@ -102,6 +102,19 @@ describe('PrivacyFlow', () => {
         expect(flow.custom).toBe(false);
     });
 
+    it('requires authorization through the platform, or passes when the platform has no such API', async () => {
+        const base = privacyPlatform().platform;
+        const granted = Object.assign(Object.create(base) as typeof base, {
+            requirePrivacyAuthorize: () => Promise.resolve(false),
+        });
+        const failing = Object.assign(Object.create(base) as typeof base, {
+            requirePrivacyAuthorize: () => Promise.reject(new Error('x')),
+        });
+        await expect(new PrivacyFlow({ platform: () => granted }).require()).resolves.toBe(false);
+        await expect(new PrivacyFlow({ platform: () => failing }).require()).resolves.toBe(false);
+        await expect(new PrivacyFlow({ platform: () => base }).require()).resolves.toBe(true);
+    });
+
     it('reports whether authorization is needed', async () => {
         const make = (setting: PrivacySetting | Error) =>
             new PrivacyFlow({ platform: () => privacyPlatform({ setting }).platform }).needAuthorization();

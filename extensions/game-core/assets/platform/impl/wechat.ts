@@ -98,6 +98,14 @@ export class WechatPlatform extends MiniGamePlatform {
         );
     }
 
+    requirePrivacyAuthorize(): Promise<boolean> {
+        if (typeof this.wx.requirePrivacyAuthorize !== 'function') return Promise.resolve(true);
+        return invokeApi((cb) => this.wx.requirePrivacyAuthorize?.(cb)).then(
+            () => true,
+            () => false,
+        );
+    }
+
     onNeedPrivacyAuthorization(handler: PrivacyHandler): boolean {
         if (typeof this.wx.onNeedPrivacyAuthorization !== 'function') return false;
         this.wx.onNeedPrivacyAuthorization((resolve) =>

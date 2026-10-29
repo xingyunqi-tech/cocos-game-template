@@ -21,6 +21,7 @@ export interface AuthSession {
     token: string;
     refreshToken: string;
     userId: string;
+    /** 过期时间戳（毫秒），服务端未返回有效期时为 0 */
     expiresAt: number;
 }
 
@@ -63,6 +64,8 @@ export interface AuthServiceOptions extends AuthProtocol {
     /** 发起登录请求时的时钟读数，传回 onServerTime */
     mark?: () => number;
     fallback?: LoginFallback;
+    /** token 过期前多久主动刷新，默认 60 秒；0 不主动刷新 */
+    refreshAheadMs?: number;
     /** 平台登录（wx.login / tt.login）超时，超时按网络错误处理 */
     platformLoginTimeoutMs?: number;
     loginPath?: string;
@@ -79,9 +82,15 @@ function isOfflineError(err: unknown): boolean {
 }
 
 export const PLATFORM_LOGIN_TIMEOUT_MS = 10000;
+const REFRESH_AHEAD_MS = 60000;
+const REFRESH_RETRY_MS = 30000;
 
 function invalidResponse(): HttpError {
     return new HttpError('parse', '登录响应缺少 token 或 userId');
+}
+
+function expiresAt(now: number, expiresIn: number | undefined): number {
+    return typeof expiresIn === 'number' && expiresIn > 0 ? now + expiresIn * 1000 : 0;
 }
 
 function parseWith<T>(parse: ((data: unknown) => T) | undefined, data: unknown): Partial<T> | undefined {
@@ -100,10 +109,16 @@ export class AuthService implements TokenProvider {
     private offlineEntry = false;
     private loggedOut = false;
     private epoch = 0;
+    private refreshFailedAt = -Infinity;
+    private issuedAt = 0;
 
     constructor(private readonly options: AuthServiceOptions) {}
 
-    configure(options: Partial<Pick<AuthServiceOptions, 'fallback' | 'loginPath' | 'refreshPath'> & AuthProtocol>) {
+    configure(
+        options: Partial<
+            Pick<AuthServiceOptions, 'fallback' | 'loginPath' | 'refreshPath' | 'refreshAheadMs'> & AuthProtocol
+        >,
+    ) {
         Object.assign(this.options, options);
     }
 
@@ -168,8 +183,19 @@ export class AuthService implements TokenProvider {
         return this.current?.token ?? null;
     }
 
-    /** 刷新失败为网络错误、超时或 5xx 时保留会话并返回 null；其他失败清除会话后重新登录 */
-    async refresh(): Promise<string | null> {
+    /** 提前量取 refreshAheadMs 与 token 有效期一半中的较小值 */
+    shouldRefresh(): boolean {
+        const session = this.current;
+        if (!session || session.expiresAt <= 0 || this.loggedOut) return false;
+        const lifetime = session.expiresAt - this.issuedAt;
+        const ahead = Math.min(this.options.refreshAheadMs ?? REFRESH_AHEAD_MS, lifetime / 2);
+        if (ahead <= 0) return false;
+        const now = this.now();
+        return now >= session.expiresAt - ahead && now - this.refreshFailedAt >= REFRESH_RETRY_MS;
+    }
+
+    /** 主动刷新（expiring）失败，或刷新失败为网络错误、超时、5xx 时保留会话并返回 null；其他失败清除会话后重新登录 */
+    async refresh(reason: 'expiring' | 'expired' = 'expired'): Promise<string | null> {
         if (this.loggedOut) return null;
         const session = this.current;
         const epoch = this.epoch;
@@ -183,15 +209,19 @@ export class AuthService implements TokenProvider {
                 const data = parseWith(this.options.parseRefreshResponse, res.data);
                 if (typeof data?.token !== 'string' || !data.token) throw invalidResponse();
                 if (epoch !== this.epoch || this.current !== session) return this.current?.token ?? null;
+                this.issuedAt = this.now();
                 this.current = {
                     ...session,
                     token: data.token,
                     refreshToken: data.refreshToken ?? session.refreshToken,
-                    expiresAt: this.now() + (data.expiresIn ?? 0) * 1000,
+                    expiresAt: expiresAt(this.now(), data.expiresIn),
                 };
                 return this.current.token;
             } catch (err) {
-                if (err instanceof HttpError && isOfflineError(err)) return null;
+                if (reason === 'expiring' || (err instanceof HttpError && isOfflineError(err))) {
+                    this.refreshFailedAt = this.now();
+                    return null;
+                }
                 if (epoch !== this.epoch) return null;
                 if (this.current !== session) return this.current?.token ?? null;
                 this.current = null;
@@ -241,11 +271,12 @@ export class AuthService implements TokenProvider {
         if (String(data.userId).includes(':'))
             throw new HttpError('parse', `userId 不能包含冒号：${String(data.userId)}`);
         if (epoch !== this.epoch) throw new HttpError('aborted', '登录状态已变化');
+        this.issuedAt = this.now();
         const session: AuthSession = {
             token: data.token,
             refreshToken: data.refreshToken ?? '',
             userId: String(data.userId),
-            expiresAt: this.now() + (data.expiresIn ?? 0) * 1000,
+            expiresAt: expiresAt(this.now(), data.expiresIn),
         };
         if (switchUser || !this.activeUser) {
             this.options.onUser?.(session.userId);

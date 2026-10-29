@@ -14,7 +14,10 @@ export type ResponseInterceptor = (response: HttpResponse) => HttpResponse | Pro
 
 export interface TokenProvider {
     getToken(): string | null;
-    refresh(): Promise<string | null>;
+    /** reason 为 expiring 表示 token 即将过期时的主动刷新，expired 表示请求返回 401 */
+    refresh(reason?: 'expiring' | 'expired'): Promise<string | null>;
+    /** 返回 true 时先刷新 token 再发送请求（token 即将过期） */
+    shouldRefresh?(): boolean;
 }
 
 export interface BusinessResult {
@@ -203,7 +206,10 @@ export class HttpClient {
     private async sendWithAuth(request: HttpRequest): Promise<HttpResponse> {
         const provider = request.skipAuth ? undefined : this.options.tokenProvider;
         if (!provider) return this.send(request, null);
-        const refreshed = this.refreshing ? await cancellable(this.refreshing, request.signal) : undefined;
+        let refreshed = this.refreshing ? await cancellable(this.refreshing, request.signal) : undefined;
+        if (refreshed === undefined && !request.skipRefresh && provider.shouldRefresh?.()) {
+            refreshed = (await cancellable(this.refreshToken(provider, 'expiring'), request.signal)) ?? undefined;
+        }
         const used = provider.getToken();
         try {
             return await this.send(request, used);
@@ -212,16 +218,16 @@ export class HttpClient {
             const current = provider.getToken();
             if (current && current !== used) return this.send(request, current);
             if (refreshed === null) throw err;
-            const token = await cancellable(this.refreshToken(provider), request.signal);
+            const token = await cancellable(this.refreshToken(provider, 'expired'), request.signal);
             if (!token) throw err;
             return this.send(request, token);
         }
     }
 
-    private refreshToken(provider: TokenProvider): Promise<string | null> {
+    private refreshToken(provider: TokenProvider, reason: 'expiring' | 'expired'): Promise<string | null> {
         if (!this.refreshing) {
             this.refreshing = provider
-                .refresh()
+                .refresh(reason)
                 .catch(() => null)
                 .finally(() => {
                     this.refreshing = null;

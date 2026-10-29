@@ -118,6 +118,7 @@ export interface WechatApi extends MiniGameApi {
     getPrivacySetting?(options: Callbacks<{ needAuthorization: boolean }>): void;
     openPrivacyContract?(options: Callbacks): void;
     onNeedPrivacyAuthorization?(listener: (resolve: NeedPrivacyResolve) => void): void;
+    requirePrivacyAuthorize?(options: Callbacks): void;
     onShareTimeline?(listener: () => { title?: string; imageUrl?: string; query?: string }): void;
     offShareTimeline?(listener: () => { title?: string; imageUrl?: string; query?: string }): void;
 }

@@ -1,4 +1,4 @@
-export const GAME_CORE_VERSION = '2.0.1-dev';
+export const GAME_CORE_VERSION = '2.1.0';
 
 export { GameRoot } from './boot/GameRoot';
 export { BootPipeline, BootStepError } from './boot/BootPipeline';

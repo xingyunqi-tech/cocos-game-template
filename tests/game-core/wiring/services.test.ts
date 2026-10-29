@@ -11,6 +11,15 @@ const audio = vi.hoisted(() => {
             if (!value) source.playing = false;
         },
         stop: () => (source.playing = false),
+        pause: () => {
+            source.playing = false;
+            log.push('pause');
+        },
+        resume: () => {
+            source.playing = true;
+            log.push('resume');
+        },
+        getComponent: () => source,
     };
     const playMusic = (clip: { name: string }) => {
         if (!on) return;
@@ -25,6 +34,7 @@ const memory = vi.hoisted(() => new Map<string, string>());
 vi.mock('cc', async (importOriginal) => ({
     ...(await importOriginal<object>()),
     AudioClip: class {},
+    AudioSource: class {},
     sys: {
         localStorage: {
             getItem: (key: string) => memory.get(key) ?? null,
@@ -166,5 +176,61 @@ describe('platform and store injection', () => {
         deviceSave.flush();
         expect(JSON.parse(data.get('gc:d:injected')!)).toEqual({ v: 1, d: { n: 3 } });
         expect(memory.has('gc:d:injected')).toBe(false);
+    });
+});
+
+describe('ads and background music', () => {
+    it('pauses playing music while a platform ad shows and resumes it afterwards', async () => {
+        let finish: () => void = () => undefined;
+        ads.setProvider({
+            needsUnitId: false,
+            showRewarded: () => new Promise((resolve) => (finish = () => resolve({ result: 'completed' }))),
+            showInterstitial: () => Promise.resolve({ result: 'shown' }),
+        });
+        await sound.playMusic({ bundle: 'b', path: 'A' });
+        audio.log.length = 0;
+        const pending = ads.showRewarded('any');
+        expect(audio.log).toEqual(['pause']);
+        finish();
+        await pending;
+        expect(audio.log).toEqual(['pause', 'resume']);
+    });
+
+    it('does not resume music that was stopped, replaced or switched off during an ad', async () => {
+        const finishers: Array<() => void> = [];
+        ads.setProvider({
+            needsUnitId: false,
+            showRewarded: () => new Promise((resolve) => finishers.push(() => resolve({ result: 'completed' }))),
+            showInterstitial: () => Promise.resolve({ result: 'shown' }),
+        });
+        const during = async (change: () => void | Promise<unknown>) => {
+            settings.music = true;
+            await sound.playMusic({ bundle: 'b', path: 'A' });
+            const pending = ads.showRewarded('any');
+            await change();
+            audio.log.length = 0;
+            finishers.shift()?.();
+            await pending;
+            return audio.log.slice();
+        };
+        expect(await during(() => sound.stopMusic())).toEqual([]);
+        expect(
+            await during(() => {
+                settings.music = false;
+            }),
+        ).toEqual([]);
+        expect(await during(() => sound.playMusic({ bundle: 'b', path: 'B' }))).toEqual([]);
+    });
+
+    it('leaves stopped music alone during an ad', async () => {
+        ads.setProvider({
+            needsUnitId: false,
+            showRewarded: () => Promise.resolve({ result: 'completed' }),
+            showInterstitial: () => Promise.resolve({ result: 'shown' }),
+        });
+        sound.stopMusic();
+        audio.log.length = 0;
+        await ads.showRewarded('any');
+        expect(audio.log).toEqual([]);
     });
 });

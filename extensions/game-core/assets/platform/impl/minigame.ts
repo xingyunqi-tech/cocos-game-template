@@ -163,6 +163,16 @@ export class MiniGameAdProvider implements AdProvider {
         private readonly options: MiniGameAdOptions,
     ) {}
 
+    preloadRewarded(unitId: string) {
+        if (!this.api.createRewardedVideoAd || this.rewarded[unitId]) return;
+        try {
+            const ad = (this.rewarded[unitId] = this.api.createRewardedVideoAd({ adUnitId: unitId }));
+            ad.load().catch(() => undefined);
+        } catch {
+            delete this.rewarded[unitId];
+        }
+    }
+
     showRewarded(unitId: string): Promise<RewardedResult> {
         if (!this.api.createRewardedVideoAd) return Promise.resolve({ result: 'failed', reason: 'unsupported' });
         let ad: RewardedVideoAd;

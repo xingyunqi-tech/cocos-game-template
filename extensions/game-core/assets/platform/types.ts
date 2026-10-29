@@ -85,6 +85,8 @@ export interface AdProvider {
     readonly needsUnitId: boolean;
     showRewarded(unitId: string): Promise<RewardedResult>;
     showInterstitial(unitId: string): Promise<InterstitialResult>;
+    /** 提前加载激励视频，失败忽略 */
+    preloadRewarded?(unitId: string): void;
 }
 
 export interface ISidebar {
@@ -139,4 +141,6 @@ export interface IPlatform {
     getStorageUsage(): StorageUsage | null;
     /** 单调时钟读数（毫秒），不受修改系统时间影响；平台不提供时返回 null */
     monotonicNow(): number | null;
+    /** 需要隐私授权时弹出隐私弹窗，返回用户是否同意；未实现表示平台没有主动触发授权的接口 */
+    requirePrivacyAuthorize?(): Promise<boolean>;
 }

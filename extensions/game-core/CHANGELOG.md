@@ -1,5 +1,13 @@
 # game-core 变更记录
 
+## 2.1.0（2026-10-29）
+
+- token 主动刷新：会话剩余有效期小于 `refreshAheadMs`（默认 60 秒，可用 `auth.configure` 设置，`0` 关闭）与有效期一半中的较小值时，下一个需要鉴权的请求先刷新 token 再发送（带 `skipRefresh` 的请求除外）；主动刷新失败时保留会话，30 秒内不再主动刷新。`TokenProvider` 新增可选的 `shouldRefresh()`，`refresh` 接受可选参数 `'expiring' | 'expired'`
+- `AuthSession.expiresAt`：服务端未返回有效期（`expiresIn` 缺失或不大于 0）时为 0
+- `ads.preloadRewarded(placement)`：提前加载激励视频；`AdProvider` 新增可选的 `preloadRewarded(unitId)`，小游戏实现为创建广告实例并 `load()`
+- 平台广告展示期间暂停正在播放的背景音乐，结束后恢复（期间停止、切换音乐或关闭音乐开关时不恢复），`coreOptions.pauseMusicDuringAds` 控制，`sound.pauseForAd()` / `sound.resumeAfterAd()`；`AdServiceOptions.onShowingChange` 在平台广告开始与结束展示时回调
+- `privacy.require()`：主动触发隐私授权，需要时弹出隐私弹窗并返回是否同意；`IPlatform` 新增可选的 `requirePrivacyAuthorize()`，微信使用 `wx.requirePrivacyAuthorize`，平台没有该接口时返回 true
+
 ## 2.0.0（2026-10-29）
 
 - `configureCore({ platform, store, transport })`：在模块顶层、`initGameCore` 之前替换平台实现、`deviceSave` / `userSave` 的存储后端、HTTP 传输层（设置 `transport` 后忽略 `httpMock`）；`initGameCore` 之后调用抛错

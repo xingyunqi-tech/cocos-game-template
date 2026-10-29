@@ -83,6 +83,8 @@ export const coreOptions = {
     clickSound: null as SoundRef | null,
     /** 调试构建显示 GM 按钮 */
     gm: true,
+    /** 平台广告展示期间暂停背景音乐，结束后恢复 */
+    pauseMusicDuringAds: true,
 };
 
 export type ConfirmProvider = (options: ConfirmOptions) => Promise<boolean>;
@@ -110,6 +112,10 @@ function adClock(): () => number {
 
 export const ads = new AdService({
     policy: new AdPolicy({}, adClock()),
+    onShowingChange: (showing) => {
+        if (!showing) sound.resumeAfterAd();
+        else if (coreOptions.pauseMusicDuringAds) sound.pauseForAd();
+    },
     onResult: (kind, placement, outcome) =>
         track('ad_result', {
             kind,
