@@ -114,6 +114,44 @@ describe('AuthService login', () => {
     });
 });
 
+describe('AuthService protocol hooks', () => {
+    it('builds login and refresh bodies and parses responses through the hooks', async () => {
+        const s = setup();
+        const sent: unknown[] = [];
+        s.mock.on('POST', '/auth/login', ({ body }) => {
+            sent.push(body);
+            return { body: { code: 0, data: { accessToken: 'a1', refresh: 'r1', uid: 7, ttl: 60 } } };
+        });
+        s.mock.on('POST', '/auth/refresh', ({ body }) => {
+            sent.push(body);
+            return { body: { code: 0, data: { accessToken: 'a2', ttl: 60 } } };
+        });
+        type Wrapped = { data: { accessToken: string; refresh?: string; uid?: number; ttl: number } };
+        s.auth.configure({
+            buildLoginBody: ({ platform, credential }) => ({ channel: platform, jsCode: credential.code }),
+            parseLoginResponse: (data) => {
+                const d = (data as Wrapped).data;
+                return { token: d.accessToken, refreshToken: d.refresh ?? '', userId: d.uid ?? '', expiresIn: d.ttl };
+            },
+            buildRefreshBody: (session) => ({ rt: session.refreshToken }),
+            parseRefreshResponse: (data) => ({ token: (data as Wrapped).data.accessToken, expiresIn: 60 }),
+        });
+        await expect(s.auth.login()).resolves.toEqual({ userId: '7', offline: false });
+        await expect(s.auth.refresh()).resolves.toBe('a2');
+        expect(sent).toEqual([{ channel: 'wechat', jsCode: 'c' }, { rt: 'r1' }]);
+    });
+
+    it('treats a throwing response parser as an invalid response', async () => {
+        const s = setup({ fallback: 'last-user' });
+        s.auth.configure({
+            parseLoginResponse: () => {
+                throw new Error('bad shape');
+            },
+        });
+        await expect(s.auth.login()).rejects.toMatchObject({ kind: 'parse', message: '响应解析失败：bad shape' });
+    });
+});
+
 describe('AuthService last-user fallback', () => {
     it('enters offline with the last user when the platform login fails', async () => {
         const s = setup({ lastUser: 'old', loginError: platformFailure });

@@ -1,5 +1,6 @@
 import { Color, type Label } from 'cc';
 import { THEME, addLabel, createNode, fillRect, openModal, visibleSize, type Modal } from '../ui/kit';
+import { coreText } from '../ui/strings';
 import { HEALTH_NOTICE } from './health';
 
 export interface HealthNoticeOptions {
@@ -33,19 +34,20 @@ export class HealthNotice {
                 0,
                 18,
             );
-            addLabel(badge, '适龄提示', { fontSize: 20, color: THEME.primaryText, width: 110 }).node.setPosition(
-                0,
-                -38,
-            );
+            addLabel(badge, coreText.ageRating, {
+                fontSize: 20,
+                color: THEME.primaryText,
+                width: 110,
+            }).node.setPosition(0, -38);
             badge.setPosition(-width / 2 + 90, height / 2 - options.safeTop() - 90);
         }
-        this.progress = addLabel(root, '加载中…', { fontSize: 28, color: LIGHT, width: width - 80 });
+        this.progress = addLabel(root, coreText.loading, { fontSize: 28, color: LIGHT, width: width - 80 });
         this.progress.node.setPosition(0, -height / 2 + 360);
         HEALTH_NOTICE.forEach((line, index) => {
             const label = addLabel(root, line, { fontSize: 24, color: LIGHT, width: width - 80 });
             label.node.setPosition(0, -height / 2 + 250 - index * 40);
         });
-        addLabel(root, '健康游戏忠告', { fontSize: 26, color: LIGHT, width: width - 80 }).node.setPosition(
+        addLabel(root, coreText.healthTitle, { fontSize: 26, color: LIGHT, width: width - 80 }).node.setPosition(
             0,
             -height / 2 + 300,
         );

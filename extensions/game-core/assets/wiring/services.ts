@@ -17,7 +17,7 @@ import { PaymentService } from '../payment/Payment';
 import { AppUpdate } from '../platform/AppUpdate';
 import { createPlatform } from '../platform/createPlatform';
 import { NetworkStatus } from '../platform/NetworkStatus';
-import type { IPlatform } from '../platform/types';
+import type { IPlatform, LaunchOptions } from '../platform/types';
 import type { KeyValueStore } from '../save/KeyValueStore';
 import { SaveStore } from '../save/SaveStore';
 import { ServerTime } from '../time/ServerTime';
@@ -28,7 +28,8 @@ import { setSafeTopProvider } from '../ui/SafeTopAdapter';
 import { Settings } from '../ui/Settings';
 import { SoundService, type SoundRef } from '../ui/Sound';
 
-const storage = () => sys.localStorage as KeyValueStore;
+let backingStore: KeyValueStore | null = null;
+const storage = () => backingStore ?? (sys.localStorage as KeyValueStore);
 const localStore: KeyValueStore = {
     getItem: (key) => storage().getItem(key),
     setItem: (key, value) => storage().setItem(key, value),
@@ -38,7 +39,7 @@ const localStore: KeyValueStore = {
 const log = createLogger('game-core');
 const saveWarn = (message: string, detail: Record<string, unknown>) => log.warn(message, detail);
 
-export const platform: IPlatform = createPlatform({ debug: DEBUG });
+export let platform: IPlatform = createPlatform({ debug: DEBUG });
 export const bootPipeline = new BootPipeline();
 export const lifecycle = new Lifecycle();
 export const xhrTransport = new XhrTransport();
@@ -119,6 +120,39 @@ export const ads = new AdService({
         }),
 });
 ads.setProvider(platform.ads);
+
+type ShowListener = (options: LaunchOptions) => void;
+const showSubscriptions = new Map<ShowListener, () => void>();
+
+/** 订阅当前平台的 onShow，替换平台实现后自动转到新平台 */
+export function onPlatformShow(listener: ShowListener): () => void {
+    showSubscriptions.get(listener)?.();
+    showSubscriptions.set(listener, platform.onShow(listener));
+    return () => {
+        showSubscriptions.get(listener)?.();
+        showSubscriptions.delete(listener);
+    };
+}
+
+/** 替换平台实现，只在 initGameCore 之前调用 */
+export function usePlatform(next: IPlatform) {
+    platform = next;
+    ads.setProvider(next.ads);
+    ads.policy.useClock(adClock());
+    for (const [listener, off] of Array.from(showSubscriptions)) {
+        off();
+        showSubscriptions.set(listener, next.onShow(listener));
+    }
+}
+
+/** 替换 deviceSave、userSave 的存储后端，只在 initGameCore 之前调用；之前的写入先落到原存储 */
+export function useStore(store: KeyValueStore) {
+    deviceSave.flush();
+    userSave.flush();
+    backingStore = store;
+    deviceSave.reload();
+    userSave.reload();
+}
 
 const deviceSlot = deviceSave.slot('device', { version: 1, defaults: () => ({ id: '' }) });
 

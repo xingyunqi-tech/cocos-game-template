@@ -256,6 +256,14 @@ export class SaveStore {
         this.scopeGeneration++;
     }
 
+    /** 丢弃未写入的修改与读取缓存，之后从存储重新读取 */
+    reload() {
+        this.dirty.clear();
+        this.locks.clear();
+        this.blockedWarned.clear();
+        this.scopeGeneration++;
+    }
+
     /** 当前作用域没有存档时，把 from 作用域的存档移入当前作用域；返回是否移入 */
     adoptScope(from: string): boolean {
         if (from.includes(':')) throw new Error(`存档作用域不能包含冒号：${from}`);

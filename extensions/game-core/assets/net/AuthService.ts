@@ -1,4 +1,4 @@
-import type { IPlatform, LoginCredential } from '../platform/types';
+import type { IPlatform, LoginCredential, PlatformName } from '../platform/types';
 import type { HttpClient, TokenProvider } from './HttpClient';
 import { HttpError, type CancelSignal } from './types';
 
@@ -29,10 +29,28 @@ export interface LoginOutcome {
     offline: boolean;
 }
 
+export interface LoginRequest {
+    platform: PlatformName;
+    deviceId: string;
+    credential: LoginCredential;
+}
+
+/** 后端协议与默认不同时提供；parse 返回的字段仍按默认规则校验，抛错按响应无效处理 */
+export interface AuthProtocol {
+    /** 默认 { platform, deviceId, ...credential } */
+    buildLoginBody?: (request: LoginRequest) => unknown;
+    /** 默认按 LoginResponse 读取响应 data */
+    parseLoginResponse?: (data: unknown) => LoginResponse;
+    /** 默认 { refreshToken } */
+    buildRefreshBody?: (session: Readonly<AuthSession>) => unknown;
+    /** 默认按 RefreshResponse 读取响应 data */
+    parseRefreshResponse?: (data: unknown) => RefreshResponse;
+}
+
 /** guest：登录失败时以上次 userId 或设备游客身份进入；last-user：仅网络失败且有上次 userId 时离线进入 */
 export type LoginFallback = 'guest' | 'last-user';
 
-export interface AuthServiceOptions {
+export interface AuthServiceOptions extends AuthProtocol {
     http: HttpClient;
     platform: () => IPlatform;
     deviceId: () => string;
@@ -66,6 +84,15 @@ function invalidResponse(): HttpError {
     return new HttpError('parse', '登录响应缺少 token 或 userId');
 }
 
+function parseWith<T>(parse: ((data: unknown) => T) | undefined, data: unknown): Partial<T> | undefined {
+    if (!parse) return data as Partial<T> | undefined;
+    try {
+        return parse(data);
+    } catch (err) {
+        throw new HttpError('parse', `响应解析失败：${err instanceof Error ? err.message : String(err)}`);
+    }
+}
+
 export class AuthService implements TokenProvider {
     private current: AuthSession | null = null;
     private activeUser = '';
@@ -76,7 +103,7 @@ export class AuthService implements TokenProvider {
 
     constructor(private readonly options: AuthServiceOptions) {}
 
-    configure(options: Partial<Pick<AuthServiceOptions, 'fallback' | 'loginPath' | 'refreshPath'>>) {
+    configure(options: Partial<Pick<AuthServiceOptions, 'fallback' | 'loginPath' | 'refreshPath'> & AuthProtocol>) {
         Object.assign(this.options, options);
     }
 
@@ -148,18 +175,19 @@ export class AuthService implements TokenProvider {
         const epoch = this.epoch;
         if (session) {
             try {
-                const res = await this.options.http.post<RefreshResponse>(
+                const res = await this.options.http.post(
                     this.options.refreshPath ?? '/auth/refresh',
-                    { refreshToken: session.refreshToken },
+                    this.options.buildRefreshBody?.(session) ?? { refreshToken: session.refreshToken },
                     { skipAuth: true },
                 );
-                if (typeof res.data?.token !== 'string' || !res.data.token) throw invalidResponse();
+                const data = parseWith(this.options.parseRefreshResponse, res.data);
+                if (typeof data?.token !== 'string' || !data.token) throw invalidResponse();
                 if (epoch !== this.epoch || this.current !== session) return this.current?.token ?? null;
                 this.current = {
                     ...session,
-                    token: res.data.token,
-                    refreshToken: res.data.refreshToken ?? session.refreshToken,
-                    expiresAt: this.now() + res.data.expiresIn * 1000,
+                    token: data.token,
+                    refreshToken: data.refreshToken ?? session.refreshToken,
+                    expiresAt: this.now() + (data.expiresIn ?? 0) * 1000,
                 };
                 return this.current.token;
             } catch (err) {
@@ -201,12 +229,13 @@ export class AuthService implements TokenProvider {
         const requestStartedAt = (this.options.mark ?? this.options.now ?? Date.now)();
         const deviceId = this.options.deviceId();
         if (!credential.code && !credential.anonymousCode) credential.anonymousCode = deviceId;
-        const res = await this.options.http.post<LoginResponse>(
+        const request: LoginRequest = { platform: platform.name, deviceId, credential };
+        const res = await this.options.http.post(
             this.options.loginPath ?? '/auth/login',
-            { platform: platform.name, deviceId, ...credential },
+            this.options.buildLoginBody?.(request) ?? { platform: platform.name, deviceId, ...credential },
             { skipAuth: true, signal },
         );
-        const data = res.data;
+        const data = parseWith(this.options.parseLoginResponse, res.data);
         if (typeof data?.serverTime === 'number') this.options.onServerTime?.(data.serverTime, requestStartedAt);
         if (typeof data?.token !== 'string' || !data.token || (data.userId ?? '') === '') throw invalidResponse();
         if (String(data.userId).includes(':'))

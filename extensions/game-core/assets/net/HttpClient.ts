@@ -24,6 +24,8 @@ export interface BusinessResult {
     message?: string;
 }
 
+export type HttpErrorListener = (error: HttpError, request: HttpRequest) => void;
+
 export interface HttpClientOptions {
     transport: HttpTransport;
     baseUrl?: string;
@@ -34,7 +36,6 @@ export interface HttpClientOptions {
     tokenProvider?: TokenProvider;
     authHeader?: (token: string) => [string, string];
     businessCheck?: (data: unknown) => BusinessResult;
-    onError?: (error: HttpError, request: HttpRequest) => void;
     sleep?: (ms: number) => Promise<void>;
 }
 
@@ -127,6 +128,7 @@ class Semaphore {
 export class HttpClient {
     private readonly requestInterceptors: RequestInterceptor[] = [];
     private readonly responseInterceptors: ResponseInterceptor[] = [];
+    private readonly errorListeners: HttpErrorListener[] = [];
     private readonly semaphore: Semaphore;
     private refreshing: Promise<string | null> | null = null;
     private readonly sleep: (ms: number) => Promise<void>;
@@ -148,6 +150,12 @@ export class HttpClient {
     useResponse(interceptor: ResponseInterceptor): () => void {
         this.responseInterceptors.push(interceptor);
         return () => this.remove(this.responseInterceptors, interceptor);
+    }
+
+    /** 请求最终失败（含重试用尽、取消）时回调，返回取消监听的函数 */
+    onError(listener: HttpErrorListener): () => void {
+        this.errorListeners.push(listener);
+        return () => this.remove(this.errorListeners, listener);
     }
 
     get<T>(url: string, query?: Record<string, QueryValue>, init?: Partial<HttpRequest>) {
@@ -178,13 +186,13 @@ export class HttpClient {
             } catch (err) {
                 const failure = request.signal?.cancelled ? abortedError() : err;
                 if (attempt >= retries || !isRetryable(failure)) {
-                    if (failure instanceof HttpError) this.options.onError?.(failure, request);
+                    if (failure instanceof HttpError) this.emitError(failure, request);
                     throw failure;
                 }
                 try {
                     await cancellable(this.sleep((this.options.retryDelayMs ?? 300) * 2 ** attempt), request.signal);
                 } catch (cancelled) {
-                    if (cancelled instanceof HttpError) this.options.onError?.(cancelled, request);
+                    if (cancelled instanceof HttpError) this.emitError(cancelled, request);
                     throw cancelled;
                 }
                 attempt++;
@@ -276,6 +284,16 @@ export class HttpClient {
         }
         for (const interceptor of this.responseInterceptors) response = await interceptor(response);
         return response;
+    }
+
+    private emitError(error: HttpError, request: HttpRequest) {
+        for (const listener of this.errorListeners.slice()) {
+            try {
+                listener(error, request);
+            } catch (err) {
+                console.error('[game-core] HTTP 错误监听异常', err);
+            }
+        }
     }
 
     private remove<T>(list: T[], item: T) {

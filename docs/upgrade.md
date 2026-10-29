@@ -32,6 +32,8 @@ scripts/update-core.sh 1.1.0 --source <模板仓库地址或 file:// 本地路�
 
 0.x 版本的项目没有升级脚本，第一次升级前从模板仓库复制 `scripts/update-core.mjs`、`scripts/update-core.sh`、`scripts/check-plugins.mjs` 到项目中。
 
+从模板复制来的 `tests/game-core/` 测试的是模板自身的 game-core 与示例数据（如 `demo_level` 表），升级后可能与项目不符。game-core 已在模板仓库测试，项目中可以删除该目录；保留时按目标版本从模板仓库同步。
+
 合入后执行：
 
 ```bash

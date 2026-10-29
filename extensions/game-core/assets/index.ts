@@ -1,6 +1,6 @@
-export const GAME_CORE_VERSION = '1.2.4-dev';
+export const GAME_CORE_VERSION = '2.0.0';
 
-export { GameRoot, CONFIG_LOAD_ATTEMPTS, CONFIG_PATH } from './boot/GameRoot';
+export { GameRoot } from './boot/GameRoot';
 export { BootPipeline, BootStepError } from './boot/BootPipeline';
 export type { StepContext, StepOptions, StepResult, StepRun } from './boot/BootPipeline';
 export { Lifecycle } from './boot/Lifecycle';
@@ -20,11 +20,12 @@ export {
     auth,
     bootPipeline,
     checkStorageUsage,
+    configureCore,
     fetchRemoteConfig,
-    TABLES_DIR,
     confirm,
     createPrivacyPrompt,
     coreOptions,
+    coreText,
     coreUi,
     defaultPrivacyPrompt,
     getDesignInset,
@@ -39,7 +40,6 @@ export {
     http,
     initGameCore,
     lifecycle,
-    LOGIN_STEP_TIMEOUT_MS,
     mockTransport,
     network,
     onUserReady,
@@ -49,12 +49,17 @@ export {
     remoteConfig,
     serverTime,
     sound,
-    setSaveUser,
     sidebar,
-    STORAGE_WARN_RATIO,
     userSave,
 } from './core';
-export type { ConfirmProvider, CoreRemoteSettings, GameEntry, PrivacyPromptText } from './core';
+export type {
+    ConfirmProvider,
+    CoreConfig,
+    DocumentProvider,
+    GameEntry,
+    PrivacyPromptText,
+    SettingsProvider,
+} from './core';
 export { createLogger, logHub } from './monitor/logger';
 export type { LogLevel, LogRecord, LogSink, Logger } from './monitor/logger';
 export { track, tracker } from './monitor/track';
@@ -65,6 +70,7 @@ export { HttpClient } from './net/HttpClient';
 export type {
     BusinessResult,
     HttpClientOptions,
+    HttpErrorListener,
     RequestInterceptor,
     ResponseInterceptor,
     TokenProvider,
@@ -83,7 +89,7 @@ export type {
     TransportRequest,
     TransportResponse,
 } from './net/types';
-export { SaveSlot, SaveStore } from './save/SaveStore';
+export { migrate, SaveSlot, SaveStore } from './save/SaveStore';
 export type { Migration, SaveStoreOptions, SlotOptions } from './save/SaveStore';
 export { MemoryStore } from './save/KeyValueStore';
 export type { KeyValueStore } from './save/KeyValueStore';
@@ -93,10 +99,12 @@ export { AdService } from './ads/AdService';
 export type { AdServiceOptions, AdUnits } from './ads/AdService';
 export { AuthService } from './net/AuthService';
 export type {
+    AuthProtocol,
     AuthServiceOptions,
     AuthSession,
     LoginFallback,
     LoginOutcome,
+    LoginRequest,
     LoginResponse,
     RefreshResponse,
 } from './net/AuthService';

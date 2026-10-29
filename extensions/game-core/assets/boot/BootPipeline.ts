@@ -68,6 +68,7 @@ function withTimeout(task: Promise<void>, ms: number | undefined, name: string):
 
 export class BootPipeline {
     private readonly steps: Step[] = [];
+    private readonly completed = new Set<string>();
     private running = false;
 
     /** before / after 在 run() 时解析，锚点可以晚于本步骤注册；同一锚点的多个步骤按注册顺序排列 */
@@ -122,6 +123,13 @@ export class BootPipeline {
         return placed;
     }
 
+    /** 清除已完成记录，下次 run() 执行全部步骤 */
+    reset() {
+        if (this.running) throw new Error('启动流水线正在运行');
+        this.completed.clear();
+    }
+
+    /** 已成功的步骤在再次 run() 时跳过（计入进度，不产生结果），失败重试只执行未完成的步骤 */
     async run(hooks: PipelineHooks = {}): Promise<StepResult[]> {
         if (this.running) throw new Error('启动流水线正在运行');
         const steps = this.ordered();
@@ -132,6 +140,11 @@ export class BootPipeline {
         let done = 0;
         try {
             for (const step of steps) {
+                if (this.completed.has(step.name)) {
+                    done += step.weight;
+                    hooks.onProgress?.(done / total, step.name);
+                    continue;
+                }
                 const base = done;
                 const cancel = new CancelSource();
                 const report = (ratio: number) => {
@@ -162,6 +175,7 @@ export class BootPipeline {
                 results.push(result);
                 hooks.onStepDone?.(result);
                 if (!result.ok && !step.optional) throw new BootStepError(step.name, error);
+                if (result.ok) this.completed.add(step.name);
                 done += step.weight;
                 hooks.onProgress?.(done / total, step.name);
             }

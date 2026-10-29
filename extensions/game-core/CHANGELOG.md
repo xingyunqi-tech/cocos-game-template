@@ -1,5 +1,32 @@
 # game-core 变更记录
 
+## 2.0.0（2026-10-29）
+
+- `configureCore({ platform, store, transport })`：在模块顶层、`initGameCore` 之前替换平台实现、`deviceSave` / `userSave` 的存储后端、HTTP 传输层（设置 `transport` 后忽略 `httpMock`）；`initGameCore` 之后调用抛错
+- `AuthService` 协议适配：`auth.configure` 接受 `buildLoginBody`、`parseLoginResponse`、`buildRefreshBody`、`parseRefreshResponse`，解析函数抛错按响应无效处理；新增类型 `AuthProtocol`、`LoginRequest`
+- `http.onError(listener)`：请求最终失败时回调，可注册多个，返回取消函数；监听抛错不影响其他监听
+- 启动流水线失败重试时只执行未成功的步骤（登录等已成功步骤不重复执行，`onUserReady` 不重复回调）；`BootPipeline.reset()` 清除完成记录
+- `coreText`：模板界面文案集中定义，可在模块顶层修改；`coreUi.setSettings`、`coreUi.setDocument` 替换设置面板与协议页（隐私流程中的查看入口同样使用替换后的协议页）
+- 侧边栏回调与 `sidebarReward` 以用户就绪（`onUserReady`）为准；`configureCore({ platform })` 之前注册的侧边栏回调随平台替换迁移
+- 类型扩展点统一为 `db://game-core/augment`（`TableMap`、`RemoteSettingsMap`）
+- `migrate` 从公开入口导出
+- `AdPolicy.useClock(now)`：换用另一个时钟并重新计时
+- `SaveStore.reload()`：丢弃未写入的修改与读取缓存，之后从存储重新读取
+- 隐私弹窗标题、同意 / 拒绝按钮与微信隐私保护指引入口文案改由 `coreText` 提供
+
+### 迁移
+
+- 类型扩展：`declare module 'db://game-core/config/Tables'`、`declare module 'db://game-core/config/RemoteConfig'` 改为 `declare module 'db://game-core/augment'`；合入「构建」中的 `scripts/lib/tables.mjs` 后执行 `npm run tables` 重新生成 `TableTypes.ts`
+- `http.configure({ onError })` 移除，改用 `http.onError(listener)`；`HttpClientOptions.onError` 移除
+- 公开入口移除 `TABLES_DIR`、`LOGIN_STEP_TIMEOUT_MS`、`STORAGE_WARN_RATIO`、`CONFIG_LOAD_ATTEMPTS`、`CONFIG_PATH`、`setSaveUser`、`CoreRemoteSettings`（用 `RemoteSettingsMap`）
+- `assets/game/`、`assets/bundles/` 中引用 `db://game-core/<路径>` 或 `game-core/assets/...`（`db://game-core/augment` 除外）被 ESLint 禁止，改为从 `db://game-core` 引用；测试不受此限制，可继续按路径引用不依赖引擎的模块（公开入口会加载引擎与 oops，不能在 Node 测试中导入）
+- 启动步骤失败后点击重试不再重跑已成功的步骤；依赖"重试时全部步骤重新执行"的业务步骤需改为在业务入口或 `onUserReady` 中处理
+
+### 构建
+
+- `scripts/lib/tables.mjs`：生成的 `TableTypes.ts` 扩展 `db://game-core/augment`
+- `eslint.config.mjs`：业务层禁止引用 game-core 除公开入口与 `augment` 以外的路径
+
 ## 1.2.3（2026-10-28）
 
 game-core 代码无变更，本版本只有构建脚本与工程配置，需按下列条目从模板仓库手工合入。

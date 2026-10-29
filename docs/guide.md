@@ -10,14 +10,19 @@ extensions/oops-plugin-framework/  oops 框架，禁止修改
 ```
 
 - 业务层不直接访问 `wx`、`tt`、`window`、`globalThis`，平台能力通过 `platform` 使用（ESLint 检查）
-- 业务层不引用 `db://game-core/**/impl/**`
-- 修改 game-core 前先确认能否通过 `coreOptions`、`coreUi.setConfirm`、`THEME` 等扩展点实现；必须修改时向模板仓库提交，避免下游各自改插件
+- 业务层只引用 `db://game-core`（类型扩展用 `declare module 'db://game-core/augment'`），ESLint 禁止引用 game-core 的其他路径
+- 修改 game-core 前先确认能否通过扩展点实现，必须修改时向模板仓库提交，避免下游各自改插件：
+  - `configureCore({ platform, store, transport })`：在模块顶层调用，替换平台实现、存档存储后端、HTTP 传输层
+  - `auth.configure({ buildLoginBody, parseLoginResponse, buildRefreshBody, parseRefreshResponse })`：后端登录、刷新协议与默认不同时适配
+  - `http.onError(listener)`：监听请求最终失败，可注册多个
+  - `coreUi.setConfirm`、`coreUi.setSettings`、`coreUi.setDocument`：替换确认框、设置面板、协议页
+  - `coreText`：模板界面文案（加载、启动失败、健康忠告、设置面板等）；`LEGAL_DOCUMENTS`：协议页标题与路径；`THEME`：模板界面样式；`coreOptions`：其他模板行为
 
 ## 2. 启动顺序
 
 `GameRoot` 加载 `config.json` → oops 初始化 → `initGameCore()` → 启动流水线（`tables` → `login` → `remote-config` → 业务步骤（示例为 `demo-bundle`））→ 关闭健康忠告加载页 → `setGameEntry` 注册的入口。
 
-业务步骤用 `bootPipeline.register(name, run, { after: 'login' })` 注册；锚点可以是其他模块注册的步骤，执行时解析。必需步骤失败显示“启动失败，点击重试”，`optional: true` 的步骤失败只上报。业务入口抛错时同样显示“启动失败，点击重试”，点击后重新调用入口（只重新调用入口，不重跑流水线），入口需可重复执行。
+业务步骤用 `bootPipeline.register(name, run, { after: 'login' })` 注册；锚点可以是其他模块注册的步骤，执行时解析。必需步骤失败显示“启动失败，点击重试”，点击后只执行未成功的步骤（已成功的步骤与登录不重复执行），`optional: true` 的步骤失败只上报、重试时再次执行。业务入口抛错时同样显示“启动失败，点击重试”，点击后重新调用入口（只重新调用入口，不重跑流水线），入口需可重复执行。
 
 ## 3. 新增业务模块
 
@@ -165,7 +170,7 @@ bootPipeline.register(
 - 业务配置项扩展 `RemoteSettingsMap` 并在模块顶层提供默认值，`remoteConfig.get` 类型自动推导；未提供默认值且远程未下发的项读到 `undefined`：
 
 ```ts
-declare module 'db://game-core/config/RemoteConfig' {
+declare module 'db://game-core/augment' {
     interface RemoteSettingsMap {
         dailyAdLimit: number;
     }

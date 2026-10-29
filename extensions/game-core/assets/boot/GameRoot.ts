@@ -5,6 +5,7 @@ import { bootPipeline, coreOptions, getDesignInset, healthNotice, initGameCore, 
 import { reportError } from '../monitor/errors';
 import { createLogger } from '../monitor/logger';
 import { track } from '../monitor/track';
+import { coreText } from '../ui/strings';
 import { BootStepError } from './BootPipeline';
 import { retry } from './retry';
 
@@ -14,10 +15,6 @@ const { ccclass } = _decorator;
 
 export const CONFIG_PATH = 'config';
 export const CONFIG_LOAD_ATTEMPTS = 3;
-
-const CONFIG_FAILED_TEXT = '配置加载失败，点击重试';
-const BOOT_FAILED_TEXT = '启动失败，点击重试';
-const LOADING_TEXT = '加载中…';
 
 GuiPromptConfig.Notify.path = 'common/prefab/notify';
 GuiPromptConfig.Wait.path = 'common/prefab/wait';
@@ -50,7 +47,7 @@ export class GameRoot extends Root {
     private async attempt() {
         if (this.busy || this.stage === 'done') return;
         this.busy = true;
-        if (this.fallback) this.fallback.string = LOADING_TEXT;
+        if (this.fallback) this.fallback.string = coreText.loading;
         if (this.stage === 'config') await this.loadConfigStage();
         else if (this.stage === 'pipeline') await this.pipelineStage();
         else await this.entryStage();
@@ -62,7 +59,7 @@ export class GameRoot extends Root {
         } catch (err) {
             console.error('[game-core] config.json 加载失败', err);
             this.busy = false;
-            this.showFallback(CONFIG_FAILED_TEXT);
+            this.showFallback(coreText.configFailed);
             return;
         }
         this.hideFallback();
@@ -90,7 +87,7 @@ export class GameRoot extends Root {
             if (!(err instanceof BootStepError)) reportError(err, 'boot');
             this.busy = false;
             healthNotice.setText('');
-            this.showFallback(BOOT_FAILED_TEXT);
+            this.showFallback(coreText.bootFailed);
             return;
         }
         this.stage = 'entry';
@@ -105,7 +102,7 @@ export class GameRoot extends Root {
         const ok = await runGameEntry();
         this.busy = false;
         if (!ok) {
-            this.showFallback(BOOT_FAILED_TEXT);
+            this.showFallback(coreText.bootFailed);
             return;
         }
         this.stage = 'done';

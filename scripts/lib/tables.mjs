@@ -131,7 +131,7 @@ export function renderTypes(tables) {
         }
         lines.push('}', '');
     }
-    lines.push("declare module 'db://game-core/config/Tables' {", '    interface TableMap {');
+    lines.push("declare module 'db://game-core/augment' {", '    interface TableMap {');
     for (const table of tables) lines.push(`        ${table.name}: ${typeName(table.name)};`);
     lines.push('    }', '}', '');
     return lines.join('\n');

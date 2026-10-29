@@ -17,7 +17,7 @@ export interface DemoLevelRow {
     tags: string[];
 }
 
-declare module 'db://game-core/config/Tables' {
+declare module 'db://game-core/augment' {
     interface TableMap {
         demo_level: DemoLevelRow;
     }

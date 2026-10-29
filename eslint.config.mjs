@@ -7,8 +7,8 @@ const GLOBAL_THIS = {
     message: '禁止直接访问 globalThis，平台能力通过 db://game-core 使用',
 };
 
-const GAME_CORE_IMPL = {
-    group: ['db://game-core/**/impl/**', '**/game-core/assets/**/impl/**'],
+const GAME_CORE_INTERNAL = {
+    group: ['db://game-core/*', '!db://game-core/augment', '**/game-core/assets/**'],
     message: '只能使用 db://game-core 的公开接口',
 };
 
@@ -51,7 +51,7 @@ export default tseslint.config(
         rules: {
             'no-restricted-globals': ['error', 'wx', 'tt', 'window'],
             'no-restricted-syntax': ['error', GLOBAL_THIS],
-            '@typescript-eslint/no-restricted-imports': ['error', { patterns: [GAME_CORE_IMPL] }],
+            '@typescript-eslint/no-restricted-imports': ['error', { patterns: [GAME_CORE_INTERNAL] }],
         },
     },
     {

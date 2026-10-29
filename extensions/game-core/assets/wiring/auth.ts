@@ -14,16 +14,19 @@ import {
     setSaveUser,
     userSave,
 } from './services';
-import { flushSidebarListeners } from './sidebar';
 
 const log = createLogger('game-core');
 
 const authSlot = deviceSave.slot('auth', { version: 1, defaults: () => ({ userId: '' }) });
 const userReady = new UserReady((err) => reportError(err, 'manual', { from: 'onUserReady' }));
 
-/** 登录步骤完成（含离线进入）或离线进入后重新联网登录成功时回调；注册时已就绪则立即回调；启动重试时可能再次回调 */
+/** 登录步骤完成（含离线进入）或离线进入后重新联网登录成功时回调；注册时已就绪则立即回调 */
 export function onUserReady(listener: UserReadyListener): () => void {
     return userReady.on(listener);
+}
+
+export function isUserReady(): boolean {
+    return userReady.current !== null;
 }
 
 export const auth = new AuthService({
@@ -56,7 +59,6 @@ export function registerLoginStep() {
             log.info(outcome.offline ? '离线进入' : '登录成功');
             log.debug('userId', outcome.userId);
             track('login', { offline: outcome.offline });
-            flushSidebarListeners();
             userReady.emit({ userId: outcome.userId, offline: outcome.offline });
         },
         { timeoutMs: LOGIN_STEP_TIMEOUT_MS },

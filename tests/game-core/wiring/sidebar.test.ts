@@ -3,73 +3,73 @@ import type { LaunchOptions } from 'db://game-core/platform/types';
 import { isSidebarLaunch } from 'db://game-core/platform/utils';
 
 const state = vi.hoisted(() => ({
-    hasScope: false,
+    ready: false,
     show: { scene: '', query: {} },
     listeners: [] as Array<(options: LaunchOptions) => void>,
+    readyListeners: [] as Array<() => void>,
 }));
 
 vi.mock('db://game-core/monitor/errors', () => ({ reportError: () => undefined }));
+vi.mock('db://game-core/wiring/auth', () => ({
+    isUserReady: () => state.ready,
+    onUserReady: (listener: () => void) => {
+        state.readyListeners.push(listener);
+        return () => undefined;
+    },
+}));
 vi.mock('db://game-core/wiring/services', () => ({
+    onPlatformShow: (listener: (options: LaunchOptions) => void) => {
+        state.listeners.push(listener);
+        return () => (state.listeners = state.listeners.filter((l) => l !== listener));
+    },
     platform: {
         getShowOptions: () => state.show,
-        onShow: (listener: (options: LaunchOptions) => void) => {
-            state.listeners.push(listener);
-            return () => (state.listeners = state.listeners.filter((l) => l !== listener));
-        },
         sidebar: { isLaunchedFromSidebar: (options: LaunchOptions) => isSidebarLaunch(options) },
     },
     serverTime: { today: () => '2026-10-28' },
-    userSave: {
-        get hasScope() {
-            return state.hasScope;
-        },
-        slot: () => ({ get: () => ({ lastClaimDay: '' }), set: () => undefined }),
-    },
+    userSave: { slot: () => ({ get: () => ({ lastClaimDay: '' }), set: () => undefined }) },
 }));
 
-const { onSidebarLaunch, flushSidebarListeners } = await import('db://game-core/wiring/sidebar');
-const SIDEBAR = { scene: '021036', query: {} } as LaunchOptions;
+const { onSidebarLaunch, sidebarReward } = await import('db://game-core/wiring/sidebar');
+const SIDEBAR: LaunchOptions = { scene: '021036', query: {} };
 const show = (options: LaunchOptions) => {
     state.show = options;
     for (const listener of state.listeners.slice()) listener(options);
 };
+const becomeReady = () => {
+    state.ready = true;
+    for (const listener of state.readyListeners) listener();
+};
+const offs: Array<() => void> = [];
 
 beforeEach(() => {
-    state.hasScope = false;
+    for (const off of offs.splice(0)) off();
+    state.ready = false;
     state.show = { scene: '', query: {} };
-    flushSidebarListeners();
 });
 
 describe('onSidebarLaunch', () => {
-    it('calls back after login for a sidebar return before login', () => {
-        const listener = vi.fn();
-        const off = onSidebarLaunch(listener);
+    it('calls back once after the user is ready for sidebar returns before that, unless unsubscribed', () => {
+        const kept = vi.fn();
+        const dropped = vi.fn();
+        offs.push(onSidebarLaunch(kept));
+        const off = onSidebarLaunch(dropped);
         show(SIDEBAR);
         show(SIDEBAR);
-        expect(listener).not.toHaveBeenCalled();
-        state.hasScope = true;
-        flushSidebarListeners();
-        expect(listener).toHaveBeenCalledTimes(1);
         off();
+        expect(kept).not.toHaveBeenCalled();
+        expect(sidebarReward.canClaim()).toBe(false);
+        becomeReady();
+        expect(kept).toHaveBeenCalledTimes(1);
+        expect(dropped).not.toHaveBeenCalled();
     });
 
-    it('calls back immediately for a sidebar return after login', () => {
-        state.hasScope = true;
+    it('calls back immediately for a sidebar return after the user is ready', () => {
+        state.ready = true;
         const listener = vi.fn();
-        const off = onSidebarLaunch(listener);
+        offs.push(onSidebarLaunch(listener));
         show({ scene: '1001', query: {} });
         show(SIDEBAR);
         expect(listener).toHaveBeenCalledTimes(1);
-        off();
-    });
-
-    it('drops a pending callback after unsubscribing', () => {
-        const listener = vi.fn();
-        const off = onSidebarLaunch(listener);
-        show(SIDEBAR);
-        off();
-        state.hasScope = true;
-        flushSidebarListeners();
-        expect(listener).not.toHaveBeenCalled();
     });
 });

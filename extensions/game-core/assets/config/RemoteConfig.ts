@@ -1,14 +1,10 @@
+import type { RemoteSettingsMap } from '../augment';
+
+export type { RemoteSettingsMap };
+
 export type RemoteFetcher<T> = () => Promise<Partial<T>>;
 
 export type RemoteSource = 'defaults' | 'cache' | 'remote';
-
-/** 远程配置项；业务用 declare module 'db://game-core/config/RemoteConfig' 扩展，并用 remoteConfig.setDefaults 提供默认值 */
-export interface RemoteSettingsMap {
-    /** 审核模式，模板不读取，供业务在审核期间隐藏功能 */
-    reviewMode: boolean;
-    /** 分享奖励开关，模板不读取，供业务使用 */
-    shareReward: boolean;
-}
 
 /** 未提供默认值且远程未下发的配置项读到 undefined */
 export class RemoteConfig<T extends object> {

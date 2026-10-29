@@ -1,5 +1,7 @@
+import { LEGAL_DOCUMENTS } from './DocumentPage';
 import { THEME, addButton, addLabel, addPanel, getLayer, openModal, setButtonText } from './kit';
 import type { Settings } from './Settings';
+import { coreText } from './strings';
 
 export interface SettingsPanelOptions {
     title: string;
@@ -10,11 +12,7 @@ export interface SettingsPanelOptions {
 
 type ToggleKey = 'music' | 'effect' | 'vibration';
 
-const ROWS: Array<{ key: ToggleKey; label: string }> = [
-    { key: 'music', label: '音乐' },
-    { key: 'effect', label: '音效' },
-    { key: 'vibration', label: '震动' },
-];
+const ROWS: ToggleKey[] = ['music', 'effect', 'vibration'];
 
 const WIDTH = 580;
 const HEIGHT = 680;
@@ -30,14 +28,19 @@ export function openSettings(options: SettingsPanelOptions) {
         HEIGHT / 2 - 60,
     );
 
-    ROWS.forEach((row, index) => {
+    ROWS.forEach((key, index) => {
+        const row = { key, label: coreText[key] };
         const y = HEIGHT / 2 - 160 - index * 100;
         addLabel(panel, row.label, { width: 200, align: 'left' }).node.setPosition(-WIDTH / 2 + 150, y);
         const render = () =>
-            setButtonText(toggle, settings[row.key] ? '开' : '关', settings[row.key] ? THEME.primary : THEME.secondary);
+            setButtonText(
+                toggle,
+                settings[row.key] ? coreText.on : coreText.off,
+                settings[row.key] ? THEME.primary : THEME.secondary,
+            );
         const toggle = addButton(
             panel,
-            settings[row.key] ? '开' : '关',
+            settings[row.key] ? coreText.on : coreText.off,
             () => {
                 settings[row.key] = !settings[row.key];
                 render();
@@ -51,8 +54,14 @@ export function openSettings(options: SettingsPanelOptions) {
     });
 
     const linkStyle = { width: 240, height: 56, color: THEME.panel, textColor: THEME.primary, fontSize: 26 };
-    addButton(panel, '隐私政策', options.openPrivacy, linkStyle).setPosition(-130, -HEIGHT / 2 + 170);
-    addButton(panel, '用户协议', options.openAgreement, linkStyle).setPosition(130, -HEIGHT / 2 + 170);
-    addButton(panel, '关闭', () => modal.close()).setPosition(0, -HEIGHT / 2 + 70);
+    addButton(panel, LEGAL_DOCUMENTS.privacy.title, options.openPrivacy, linkStyle).setPosition(
+        -130,
+        -HEIGHT / 2 + 170,
+    );
+    addButton(panel, LEGAL_DOCUMENTS.agreement.title, options.openAgreement, linkStyle).setPosition(
+        130,
+        -HEIGHT / 2 + 170,
+    );
+    addButton(panel, coreText.close, () => modal.close()).setPosition(0, -HEIGHT / 2 + 70);
     return modal;
 }

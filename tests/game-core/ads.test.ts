@@ -53,6 +53,20 @@ describe('AdPolicy', () => {
     });
 });
 
+describe('AdPolicy clock', () => {
+    it('restarts all timers from the new clock', () => {
+        const old = clock(1_000_000);
+        const policy = new AdPolicy({}, old.now);
+        old.advance(40000);
+        policy.recordInterstitialShown();
+        const fresh = clock(50);
+        policy.useClock(fresh.now);
+        expect(policy.interstitialWaitMs()).toBe(30000);
+        fresh.advance(30000);
+        expect(policy.interstitialWaitMs()).toBe(0);
+    });
+});
+
 describe('AdService', () => {
     it('maps placements to unit ids and reports results', async () => {
         const onResult = vi.fn();

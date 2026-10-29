@@ -3,7 +3,6 @@ import { DEBUG, HTML5, MINIGAME } from 'cc/env';
 import { EventMessage } from 'db://oops-framework/core/common/event/EventMessage';
 import { oops } from 'db://oops-framework/core/Oops';
 import { gameConfigData, getEnv } from './config/env';
-import type { RemoteSettingsMap } from './config/RemoteConfig';
 import { Tables } from './config/Tables';
 import { installGmButton } from './debug/GmPanel';
 import { errorReporter, reportError } from './monitor/errors';
@@ -11,7 +10,10 @@ import { createLogger, logHub } from './monitor/logger';
 import { track, tracker } from './monitor/track';
 import { isPermanentUploadError, TrackUploader } from './monitor/TrackUploader';
 import { HttpClient } from './net/HttpClient';
+import type { HttpTransport } from './net/types';
 import { XhrTransport } from './net/XhrTransport';
+import type { IPlatform } from './platform/types';
+import type { KeyValueStore } from './save/KeyValueStore';
 import { auth, registerLoginStep } from './wiring/auth';
 import { registerCoreMocks } from './wiring/mocks';
 import { registerRemoteConfigStep } from './wiring/remote';
@@ -35,6 +37,8 @@ import {
     serverTime,
     settings,
     sound,
+    usePlatform,
+    useStore,
     userSave,
     xhrTransport,
 } from './wiring/services';
@@ -46,9 +50,8 @@ export { auth, onUserReady } from './wiring/auth';
 export { fetchRemoteConfig } from './wiring/remote';
 export { onSidebarLaunch, sidebar, sidebarReward, simulateSidebarLaunch } from './wiring/sidebar';
 export { coreUi, createPrivacyPrompt, defaultPrivacyPrompt, privacy } from './wiring/ui';
-export type { PrivacyPromptText } from './wiring/ui';
-
-export type CoreRemoteSettings = RemoteSettingsMap;
+export type { DocumentProvider, PrivacyPromptText, SettingsProvider } from './wiring/ui';
+export { coreText } from './ui/strings';
 
 const log = createLogger('game-core');
 
@@ -107,6 +110,24 @@ export async function runGameEntry(): Promise<boolean> {
 }
 
 let initialized = false;
+let customTransport: HttpTransport | null = null;
+
+export interface CoreConfig {
+    /** 替换平台实现（新平台或包装内置实现） */
+    platform?: IPlatform;
+    /** 替换 deviceSave、userSave 的存储后端，默认 sys.localStorage */
+    store?: KeyValueStore;
+    /** 替换 HTTP 传输层，设置后忽略 httpMock */
+    transport?: HttpTransport;
+}
+
+/** 在模块顶层、initGameCore 之前调用 */
+export function configureCore(config: CoreConfig) {
+    if (initialized) throw new Error('configureCore 须在 initGameCore 之前调用');
+    if (config.platform) usePlatform(config.platform);
+    if (config.store) useStore(config.store);
+    if (config.transport) customTransport = config.transport;
+}
 
 export function initGameCore() {
     if (initialized) return;
@@ -127,17 +148,17 @@ export function initGameCore() {
     http.configure({
         baseUrl: env.httpServer,
         timeoutMs: env.httpTimeout,
-        transport: env.httpMock ? mockTransport : xhrTransport,
+        transport: customTransport ?? (env.httpMock ? mockTransport : xhrTransport),
         tokenProvider: auth,
-        onError: (error, request) => {
-            if (error.kind === 'aborted' || (env.trackPath && request.url === env.trackPath)) return;
-            reportError(error, 'http', {
-                method: request.method,
-                url: request.url,
-                kind: error.kind,
-                status: error.status,
-            });
-        },
+    });
+    http.onError((error, request) => {
+        if (error.kind === 'aborted' || (env.trackPath && request.url === env.trackPath)) return;
+        reportError(error, 'http', {
+            method: request.method,
+            url: request.url,
+            kind: error.kind,
+            status: error.status,
+        });
     });
 
     auth.configure({ fallback: env.loginFallback ?? 'guest' });

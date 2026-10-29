@@ -57,7 +57,9 @@ vi.mock('db://game-core/ui/ConfirmDialog', () => ({ showConfirm: () => Promise.r
 vi.mock('db://game-core/ui/SafeTopAdapter', () => ({ setSafeTopProvider: () => undefined }));
 vi.mock('db://game-core/compliance/HealthNotice', () => ({ HealthNotice: class {} }));
 
-const { settings, sound, releaseBundle } = await import('db://game-core/wiring/services');
+const { settings, sound, releaseBundle, usePlatform, useStore, platform, ads, deviceSave, onPlatformShow } =
+    await import('db://game-core/wiring/services');
+const services = await import('db://game-core/wiring/services');
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 async function toggleMusic() {
@@ -103,5 +105,66 @@ describe('settings music switch', () => {
         settings.music = true;
         await tick();
         expect(audio.log).toEqual(['A']);
+    });
+});
+
+describe('platform and store injection', () => {
+    it('routes ads and the shared platform binding to an injected platform', async () => {
+        const showRewarded = vi.fn(() => Promise.resolve({ result: 'completed' as const }));
+        const injected = {
+            ...platform,
+            name: 'web' as const,
+            ads: { needsUnitId: false, showRewarded, showInterstitial: vi.fn() },
+            monotonicNow: () => 1000,
+        };
+        usePlatform(injected);
+        expect(services.platform).toBe(injected);
+        await expect(ads.showRewarded('any')).resolves.toEqual({ result: 'completed' });
+        expect(showRewarded).toHaveBeenCalledWith('any');
+    });
+
+    it('moves onShow subscriptions to an injected platform', () => {
+        const oldShows: Array<() => void> = [];
+        const newShows: Array<() => void> = [];
+        const base = Object.assign(Object.create(platform) as typeof platform, {
+            onShow: (l: () => void) => (oldShows.push(l), () => undefined),
+        });
+        usePlatform(base);
+        const listener = vi.fn();
+        onPlatformShow(listener);
+        usePlatform(
+            Object.assign(Object.create(platform) as typeof platform, {
+                onShow: (l: () => void) => (newShows.push(l), () => undefined),
+            }),
+        );
+        expect(oldShows).toEqual([listener]);
+        expect(newShows).toEqual([listener]);
+    });
+
+    it('flushes pending writes to the previous store before switching and rereads afterwards', () => {
+        const slot = deviceSave.slot('switching', { version: 1, defaults: () => ({ n: 0 }) });
+        slot.set({ n: 1 });
+        const data = new Map<string, string>([['gc:d:switching', JSON.stringify({ v: 1, d: { n: 9 } })]]);
+        useStore({
+            getItem: (key) => data.get(key) ?? null,
+            setItem: (key, value) => void data.set(key, value),
+            removeItem: (key) => void data.delete(key),
+        });
+        expect(JSON.parse(memory.get('gc:d:switching')!)).toEqual({ v: 1, d: { n: 1 } });
+        expect(slot.get()).toEqual({ n: 9 });
+    });
+
+    it('reads and writes saves through an injected store', () => {
+        const data = new Map<string, string>();
+        useStore({
+            getItem: (key) => data.get(key) ?? null,
+            setItem: (key, value) => void data.set(key, value),
+            removeItem: (key) => void data.delete(key),
+        });
+        const slot = deviceSave.slot('injected', { version: 1, defaults: () => ({ n: 0 }) });
+        slot.set({ n: 3 });
+        deviceSave.flush();
+        expect(JSON.parse(data.get('gc:d:injected')!)).toEqual({ v: 1, d: { n: 3 } });
+        expect(memory.has('gc:d:injected')).toBe(false);
     });
 });

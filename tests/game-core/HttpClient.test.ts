@@ -316,11 +316,30 @@ describe('HttpClient concurrency and cancellation', () => {
         const mock = new MockTransport()
             .on('GET', '/flaky', () => (++calls < 2 ? { status: 503 } : { body: {} }))
             .on('GET', '/dead', () => ({ status: 500 }));
-        const http = client(mock, { onError, retries: 1 });
+        const http = client(mock, { retries: 1 });
+        http.onError(onError);
         await http.get('flaky');
         await expect(http.get('dead')).rejects.toBeInstanceOf(HttpError);
         expect(onError).toHaveBeenCalledOnce();
         expect(onError.mock.calls[0][1]).toMatchObject({ url: 'dead' });
+    });
+
+    it('notifies every error listener until it unsubscribes, even when one throws', async () => {
+        const mock = new MockTransport().on('GET', '/dead', () => ({ status: 400 }));
+        const http = client(mock);
+        const first = vi.fn(() => {
+            throw new Error('listener');
+        });
+        const second = vi.fn();
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        http.onError(first);
+        const off = http.onError(second);
+        await expect(http.get('dead')).rejects.toBeInstanceOf(HttpError);
+        off();
+        await expect(http.get('dead')).rejects.toBeInstanceOf(HttpError);
+        expect(first).toHaveBeenCalledTimes(2);
+        expect(second).toHaveBeenCalledTimes(1);
+        error.mockRestore();
     });
 });
 

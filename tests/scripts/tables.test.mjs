@@ -53,7 +53,7 @@ describe('renderTypes', () => {
         expect(text).toContain('export interface ShopItemRow {');
         expect(text).toContain('    /** 价格 */\n    price: number;');
         expect(text).toContain('    tags: number[];');
-        expect(text).toContain("declare module 'db://game-core/config/Tables'");
+        expect(text).toContain("declare module 'db://game-core/augment'");
         expect(text).toContain('        shop_item: ShopItemRow;');
     });
 });

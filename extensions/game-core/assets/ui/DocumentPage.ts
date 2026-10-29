@@ -1,5 +1,6 @@
 import { Mask, ScrollView, TextAsset, UITransform, resources } from 'cc';
 import { THEME, addButton, addLabel, createNode, getLayer, openModal } from './kit';
+import { coreText } from './strings';
 import { splitLines } from './text';
 
 export type LegalDocument = 'privacy' | 'agreement';
@@ -31,7 +32,7 @@ export async function openDocument(kind: LegalDocument, options: DocumentPageOpt
 
     const title = addLabel(root, LEGAL_DOCUMENTS[kind].title, { fontSize: THEME.titleSize, width: width - 240 });
     title.node.setPosition(0, height / 2 - top - 40);
-    const close = addButton(root, '返回', () => modal.close(), {
+    const close = addButton(root, coreText.back, () => modal.close(), {
         width: 120,
         height: 60,
         color: THEME.secondary,
@@ -67,7 +68,7 @@ export async function openDocument(kind: LegalDocument, options: DocumentPageOpt
         }
         content.getComponent(UITransform)!.setContentSize(textWidth, Math.max(viewHeight, cursor));
     };
-    render('加载中…');
+    render(coreText.loading);
     const scroll = viewport.addComponent(ScrollView);
     scroll.horizontal = false;
     scroll.content = content;
@@ -82,7 +83,7 @@ export async function openDocument(kind: LegalDocument, options: DocumentPageOpt
     try {
         body = await loadText(LEGAL_DOCUMENTS[kind].path);
     } catch (err) {
-        body = '内容加载失败，请稍后重试';
+        body = coreText.documentFailed;
         console.warn('[game-core] 协议文本加载失败', err);
     }
     if (!root.parent) return;

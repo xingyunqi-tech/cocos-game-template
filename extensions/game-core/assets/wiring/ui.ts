@@ -5,6 +5,7 @@ import { openDocument, type LegalDocument } from '../ui/DocumentPage';
 import { OfflineBanner } from '../ui/OfflineBanner';
 import { openSettings } from '../ui/SettingsPanel';
 import { createSidebarEntry } from '../ui/SidebarEntry';
+import { coreText } from '../ui/strings';
 import {
     confirm,
     coreOptions,
@@ -21,13 +22,30 @@ export const offlineBanner = new OfflineBanner({
     text: () => coreOptions.offlineBannerText,
 });
 
-function openLegal(kind: LegalDocument) {
+export type SettingsProvider = () => void;
+export type DocumentProvider = (kind: LegalDocument) => Promise<void> | void;
+
+function defaultDocument(kind: LegalDocument) {
     const contract =
         kind === 'privacy' && platform.name === 'wechat'
-            ? { text: '查看《小游戏隐私保护指引》', onClick: () => void platform.openPrivacyContract() }
+            ? { text: coreText.wechatPrivacyGuide, onClick: () => void platform.openPrivacyContract() }
             : null;
     return openDocument(kind, { top: () => getDesignInset().top, extraAction: contract });
 }
+
+let documentProvider: DocumentProvider = defaultDocument;
+const openLegal = (kind: LegalDocument) => Promise.resolve().then(() => documentProvider(kind));
+
+function defaultSettings() {
+    openSettings({
+        title: coreOptions.settingsTitle,
+        settings,
+        openPrivacy: () => void openLegal('privacy'),
+        openAgreement: () => void openLegal('agreement'),
+    });
+}
+
+let settingsProvider: SettingsProvider = defaultSettings;
 
 export const privacy = new PrivacyFlow({
     platform: () => platform,
@@ -46,10 +64,10 @@ export function createPrivacyPrompt(text: PrivacyPromptText = {}): PrivacyPrompt
     const guide = text.guideName ?? '《隐私保护指引》';
     return ({ openContract }) =>
         confirm({
-            title: text.title ?? '隐私保护提示',
+            title: text.title ?? coreText.privacyTitle,
             content: text.content ?? `使用相关功能前，请阅读并同意${guide}。拒绝后不影响基础玩法。`,
-            confirmText: '同意',
-            cancelText: '拒绝',
+            confirmText: coreText.agree,
+            cancelText: coreText.disagree,
             links: [{ text: `查看${guide}`, onClick: openContract }],
         });
 }
@@ -61,14 +79,16 @@ export const coreUi = {
     confirm,
     /** 替换模板内全部确认框的实现，例如改用业务 prefab */
     setConfirm: (provider: ConfirmProvider) => setConfirmProvider(provider),
-    openSettings: () =>
-        openSettings({
-            title: coreOptions.settingsTitle,
-            settings,
-            openPrivacy: () => void openLegal('privacy'),
-            openAgreement: () => void openLegal('agreement'),
-        }),
+    openSettings: () => settingsProvider(),
+    /** 替换设置面板；自定义面板可读写 settings，并用 coreUi.openDocument 打开协议页 */
+    setSettings: (provider: SettingsProvider) => {
+        settingsProvider = provider;
+    },
     openDocument: (kind: LegalDocument) => openLegal(kind),
+    /** 替换隐私政策、用户协议页（含隐私流程中的查看入口） */
+    setDocument: (provider: DocumentProvider) => {
+        documentProvider = provider;
+    },
     createSidebarEntry: (parent: Parameters<typeof createSidebarEntry>[0]) =>
         createSidebarEntry(parent, {
             isSupported: sidebar.isSupported,

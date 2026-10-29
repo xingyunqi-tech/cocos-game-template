@@ -1,6 +1,7 @@
 import { SidebarReward } from '../compliance/SidebarReward';
 import { reportError } from '../monitor/errors';
-import { platform, serverTime, userSave } from './services';
+import { isUserReady, onUserReady } from './auth';
+import { onPlatformShow, platform, serverTime, userSave } from './services';
 
 let sidebarSimulated = false;
 let sidebarListeners: Array<() => void> = [];
@@ -16,7 +17,7 @@ export const sidebar = {
 /** 调试用：按从侧边栏进入处理，并触发 onSidebarLaunch 回调 */
 export function simulateSidebarLaunch() {
     sidebarSimulated = true;
-    if (!userSave.hasScope) {
+    if (!isUserReady()) {
         pendingSidebarListeners = Array.from(new Set(pendingSidebarListeners.concat(sidebarListeners)));
         return;
     }
@@ -33,20 +34,20 @@ const sidebarSlot = userSave.slot('sidebar', { version: 1, defaults: () => ({ la
 export const sidebarReward = new SidebarReward({
     store: { get: () => sidebarSlot.get(), set: (value) => sidebarSlot.set(value) },
     launchedFromSidebar: () => sidebar.isLaunchedFromSidebar(),
-    ready: () => userSave.hasScope,
+    ready: isUserReady,
     today: () => serverTime.today(),
 });
 
 /** 从侧边栏进入（启动或切回前台）时回调；登录完成前进入的，登录后回调。同一次进入可能回调多次，发奖用 sidebarReward.claim() 判重 */
 export function onSidebarLaunch(listener: () => void): () => void {
     if (sidebar.isLaunchedFromSidebar()) {
-        if (userSave.hasScope) listener();
+        if (isUserReady()) listener();
         else pendingSidebarListeners.push(listener);
     }
     sidebarListeners.push(listener);
-    const off = platform.onShow((options) => {
+    const off = onPlatformShow((options) => {
         if (!platform.sidebar.isLaunchedFromSidebar(options)) return;
-        if (userSave.hasScope) listener();
+        if (isUserReady()) listener();
         else if (!pendingSidebarListeners.includes(listener)) pendingSidebarListeners.push(listener);
     });
     return () => {
@@ -56,8 +57,7 @@ export function onSidebarLaunch(listener: () => void): () => void {
     };
 }
 
-/** 登录完成后执行登录前从侧边栏进入时登记的回调 */
-export function flushSidebarListeners() {
+function flushSidebarListeners() {
     const listeners = pendingSidebarListeners;
     pendingSidebarListeners = [];
     for (const listener of listeners) {
@@ -68,3 +68,5 @@ export function flushSidebarListeners() {
         }
     }
 }
+
+onUserReady(() => flushSidebarListeners());

@@ -132,4 +132,35 @@ describe('BootPipeline ordering and cancellation', () => {
             [1, 'next'],
         ]);
     });
+
+    it('reruns only unfinished steps after a failure and everything after reset', async () => {
+        const order: string[] = [];
+        let failB = true;
+        let failOptional = true;
+        const pipeline = new BootPipeline()
+            .register('a', () => void order.push('a'))
+            .register(
+                'opt',
+                () => {
+                    order.push('opt');
+                    if (failOptional) throw new Error('opt');
+                },
+                { optional: true },
+            )
+            .register('b', () => {
+                order.push('b');
+                if (failB) throw new Error('b');
+            });
+        await expect(pipeline.run()).rejects.toMatchObject({ step: 'b' });
+        failB = false;
+        failOptional = false;
+        const progress: number[] = [];
+        const results = await pipeline.run({ onProgress: (ratio) => progress.push(ratio) });
+        expect(results.map((r) => r.name)).toEqual(['opt', 'b']);
+        expect(progress[0]).toBeCloseTo(1 / 3);
+        expect(order).toEqual(['a', 'opt', 'b', 'opt', 'b']);
+        pipeline.reset();
+        await pipeline.run();
+        expect(order.slice(5)).toEqual(['a', 'opt', 'b']);
+    });
 });

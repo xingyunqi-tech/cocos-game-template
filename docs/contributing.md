@@ -35,9 +35,16 @@ npm run build -- web --debug && npm run smoke:web
 
 ## game-core 结构
 
-- 单例在 `wiring/services.ts`，功能装配按 `services → sidebar → ui / auth / remote → core.ts` 单向依赖，`wiring/` 下的模块不 import `core.ts`
+- 单例在 `wiring/services.ts`，功能装配按 `services → auth → sidebar → ui / remote → core.ts` 单向依赖，`wiring/` 下的模块不 import `core.ts`
+- 业务可用的接口只从 `index.ts` 导出，业务类型扩展点只放 `augment.ts`；内部常量与装配函数不加入 `index.ts`
 - 启动步骤由 `core.ts` 按顺序调用注册函数，不在模块顶层注册
 - 新增 `.ts` 文件后执行一次构建（或用编辑器打开项目）生成 `.meta`，与源码一起提交
+
+## 版本号
+
+- 下游不改代码就能升级的修复与新增：升修订号或次版本号
+- 下游需要改代码的变更（删除或改名导出、改变已有行为、接口新增必需成员）：升主版本号，CHANGELOG 写「迁移」小节，并在一个下游副本上按迁移说明演练升级
+- `IPlatform` 等下游可能自行实现的接口，新增能力用可选成员或独立接口，避免成为破坏性变更
 
 ## 注释与命名
 

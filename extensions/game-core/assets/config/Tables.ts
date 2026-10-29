@@ -1,7 +1,6 @@
-/** 由 npm run tables 生成的 TableTypes.ts 通过 declare module 扩展 */
-export interface TableMap {
-    readonly __tables?: never;
-}
+import type { TableMap } from '../augment';
+
+export type { TableMap };
 
 export type TableName = Exclude<keyof TableMap, '__tables'>;
 

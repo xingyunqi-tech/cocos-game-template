@@ -14,17 +14,26 @@ export const DEFAULT_AD_POLICY: AdPolicyOptions = {
 
 export class AdPolicy {
     private options: AdPolicyOptions;
-    private readonly startedAt: number;
+    private startedAt: number;
     private lastInterstitial = -Infinity;
     private lastRewarded = -Infinity;
     private blockedUntil = -Infinity;
 
     constructor(
         options: Partial<AdPolicyOptions> = {},
-        private readonly now: () => number = Date.now,
+        private now: () => number = Date.now,
     ) {
         this.options = { ...DEFAULT_AD_POLICY, ...options };
         this.startedAt = now();
+    }
+
+    /** 换用另一个时钟，从当前时刻重新开始计时 */
+    useClock(now: () => number) {
+        this.now = now;
+        this.startedAt = now();
+        this.lastInterstitial = -Infinity;
+        this.lastRewarded = -Infinity;
+        this.blockedUntil = -Infinity;
     }
 
     configure(options: Partial<AdPolicyOptions>) {

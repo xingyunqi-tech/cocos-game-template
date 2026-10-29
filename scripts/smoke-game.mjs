@@ -153,6 +153,6 @@ export default async function smokeGame({ browser, page, origin, checks, pageErr
     if (bundleRequests.blocked === 0 || bundleRequests.allowed === 0) {
         throw new Error(`demo Bundle 请求次数不符：${JSON.stringify(bundleRequests)}`);
     }
-    checks.push('启动步骤失败时显示重试，点击后重新执行流水线并进入首页');
+    checks.push('启动步骤失败时显示重试，点击后执行未完成的步骤并进入首页');
     await retryPage.close();
 }

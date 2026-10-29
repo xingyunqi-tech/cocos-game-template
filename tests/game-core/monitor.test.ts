@@ -160,7 +160,7 @@ describe('RemoteConfig fallback', () => {
     });
 });
 
-declare module 'db://game-core/config/RemoteConfig' {
+declare module 'db://game-core/augment' {
     interface RemoteSettingsMap {
         testDailyLimit: number;
     }
