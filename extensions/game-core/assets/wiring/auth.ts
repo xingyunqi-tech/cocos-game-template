@@ -45,6 +45,7 @@ export const auth = new AuthService({
         setSaveUser(userId);
         if (userId !== auth.guestId && userSave.adoptScope(auth.guestId)) log.info('游客存档已并入登录账号');
     },
+    preferGuest: (lastUserId): boolean => !userSave.hasData(lastUserId) && userSave.hasData(auth.guestId),
     onWarn: (message, detail) => log.warn(message, detail),
     onServerTime: (serverMs, startedAt) => serverTime.sync(serverMs, startedAt),
     onRecovered: (userId) => userReady.emit({ userId, offline: false }),

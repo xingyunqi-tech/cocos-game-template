@@ -57,6 +57,14 @@ describe('ErrorReporter', () => {
         expect(sink.mock.calls[1][0]).toMatchObject({ message: 'plain' });
     });
 
+    it('describes an undefined error as text', () => {
+        const sink = vi.fn();
+        const reporter = new ErrorReporter();
+        reporter.addSink(sink);
+        reporter.report(undefined, 'promise');
+        expect(sink.mock.calls[0][0]).toMatchObject({ message: 'undefined' });
+    });
+
     it('captures web error and unhandledrejection events', () => {
         const target = new EventTarget();
         const sink = vi.fn<ErrorSink>();

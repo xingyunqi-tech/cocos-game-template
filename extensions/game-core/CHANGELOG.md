@@ -5,6 +5,13 @@
 - `IPayment.pay(item, hooks?)`：实现在服务端订单创建后调用 `hooks.onOrder(orderId)`，平台超时返回的 `pending` 结果带上该 `orderId`；`payment.onLateResult(listener)` 回调超时之后平台给出的结果（实现报告过订单号时带上该订单号），埋点事件为 `pay_late_result`；新增类型 `PayHooks`、`LatePayListener`
 - `initGameCore`：`config.json` 的 `type` 没有对应环境配置时抛错；初始化中途抛错后再次调用抛出同一错误
 - `GameRoot`：`initGameCore` 抛错时上报错误并显示 `coreText.initFailed`（“启动失败，请重新打开游戏”）
+- `loginFallback: 'guest'` 离线进入时，上次 userId 没有存档而游客存档有数据，以游客身份进入，之后联网登录时游客存档可并入账号；`AuthServiceOptions.preferGuest`、`SaveStore.hasData(scope)`
+- 启动登录进行中触发的 token 刷新复用该次登录，不再并发发起第二次平台登录；启动登录被取消时改为自行登录
+- 数组或原始值存档版本递增时，原存档先备份到 `__bak` 再使用默认值
+- `SaveStore.adoptScope` 判断当前作用域是否有存档时，同时检查已注册 slot 的 key，索引缺失时不覆盖已有存档
+- 抖音录屏：停止超时后，下一次录制录满时长自动结束的视频正常保存
+- 启动步骤以 `undefined` 拒绝或抛出时按失败处理
+- `reportError(undefined)` 的 message 为 `'undefined'`
 - 上传检查读取带 md5 后缀的 `src/settings.<hash>.json`；缺少、多个或无法解析时拒绝上传
 
 ## 2.2.0（2026-10-29）

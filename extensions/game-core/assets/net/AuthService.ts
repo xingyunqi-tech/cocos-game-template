@@ -64,6 +64,8 @@ export interface AuthServiceOptions extends AuthProtocol {
     /** 发起登录请求时的时钟读数，传回 onServerTime */
     mark?: () => number;
     fallback?: LoginFallback;
+    /** guest 回退时调用：返回 true 时以游客身份进入而不是上次的 userId */
+    preferGuest?: (lastUserId: string) => boolean;
     /** token 过期前多久主动刷新，默认 60 秒；0 不主动刷新 */
     refreshAheadMs?: number;
     /** 平台登录（wx.login / tt.login）超时，超时按网络错误处理 */
@@ -106,6 +108,7 @@ export class AuthService implements TokenProvider {
     private current: AuthSession | null = null;
     private activeUser = '';
     private relogin: Promise<AuthSession> | null = null;
+    private startup: Promise<AuthSession> | null = null;
     private offlineEntry = false;
     private loggedOut = false;
     private epoch = 0;
@@ -145,8 +148,10 @@ export class AuthService implements TokenProvider {
         this.loggedOut = false;
         this.epoch++;
         this.relogin = null;
+        const online = this.loginOnline(signal, true, this.epoch);
+        this.startup = online;
         try {
-            const session = await this.loginOnline(signal, true, this.epoch);
+            const session = await online;
             return { userId: session.userId, offline: false };
         } catch (err) {
             if (err instanceof HttpError && err.kind === 'aborted') throw err;
@@ -158,6 +163,8 @@ export class AuthService implements TokenProvider {
             this.activeUser = userId;
             this.options.onWarn?.('登录失败，离线进入', { error: err instanceof Error ? err.message : String(err) });
             return { userId, offline: true };
+        } finally {
+            if (this.startup === online) this.startup = null;
         }
     }
 
@@ -234,7 +241,20 @@ export class AuthService implements TokenProvider {
         }
     }
 
+    /** 启动登录进行中时复用它，它被取消时改为自行登录 */
     private loginInBackground(): Promise<AuthSession> {
+        const startup = this.startup;
+        if (!startup || this.relogin) return this.backgroundLogin();
+        const epoch = this.epoch;
+        return startup.catch((err: unknown) => {
+            if (err instanceof HttpError && err.kind === 'aborted' && epoch === this.epoch && !this.loggedOut) {
+                return this.backgroundLogin();
+            }
+            throw err;
+        });
+    }
+
+    private backgroundLogin(): Promise<AuthSession> {
         if (this.relogin) return this.relogin;
         const relogin = this.loginOnline(undefined, false, this.epoch).finally(() => {
             if (this.relogin === relogin) this.relogin = null;
@@ -245,7 +265,9 @@ export class AuthService implements TokenProvider {
 
     private fallbackUser(err: unknown): string {
         const last = this.options.lastUser.get();
-        if ((this.options.fallback ?? 'guest') === 'guest') return last || this.guestId;
+        if ((this.options.fallback ?? 'guest') === 'guest') {
+            return last && !this.options.preferGuest?.(last) ? last : this.guestId;
+        }
         return last && isOfflineError(err) ? last : '';
     }
 

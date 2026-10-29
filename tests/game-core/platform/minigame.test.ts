@@ -614,12 +614,31 @@ describe('DouyinRecorder', () => {
             const stopped = s.recorder.stop();
             await vi.advanceTimersByTimeAsync(5000);
             await expect(stopped).resolves.toBeNull();
-            await s.recorder.start();
             s.listeners.stop?.({ videoPath: 'ttfile://old.mp4' });
+            await s.recorder.start();
             s.advance(5000);
             const next = s.recorder.stop();
             s.listeners.stop?.({ videoPath: 'ttfile://new.mp4' });
             await expect(next).resolves.toBe('ttfile://new.mp4');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('keeps the auto-stopped video of the next recording when the late platform stop never arrives', async () => {
+        vi.useFakeTimers();
+        try {
+            const s = recorderSetup();
+            s.manager.stop.mockImplementation(() => undefined);
+            await s.recorder.start();
+            const stopped = s.recorder.stop();
+            await vi.advanceTimersByTimeAsync(5000);
+            await expect(stopped).resolves.toBeNull();
+            await s.recorder.start({ duration: 10 });
+            s.advance(10000);
+            s.listeners.stop?.({ videoPath: 'ttfile://auto.mp4' });
+            await expect(s.recorder.stop()).resolves.toBe('ttfile://auto.mp4');
+            await expect(s.recorder.start()).resolves.toBe(true);
         } finally {
             vi.useRealTimers();
         }

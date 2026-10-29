@@ -48,6 +48,29 @@ describe('BootPipeline', () => {
         await expect(pipeline.run()).rejects.toBeInstanceOf(BootStepError);
     });
 
+    it('fails a step that rejects without a reason', async () => {
+        const reason: unknown = undefined;
+        const pipeline = new BootPipeline()
+            .register(
+                'bare',
+                async () => {
+                    await Promise.resolve();
+                    throw reason;
+                },
+                { optional: true },
+            )
+            .register(
+                'thrown',
+                () => {
+                    throw reason;
+                },
+                { optional: true },
+            );
+        const results = await pipeline.run();
+        expect(results.map((r) => r.ok)).toEqual([false, false]);
+        expect(String(results[0].error)).toContain('启动步骤 bare 失败');
+    });
+
     it('fails a step that exceeds its timeout', async () => {
         const pipeline = new BootPipeline().register('slow', () => new Promise(() => undefined), {
             timeoutMs: 10,

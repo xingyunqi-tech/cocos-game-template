@@ -11,6 +11,7 @@ interface SetupOptions {
     loginError?: Record<string, unknown>;
     loginHangs?: boolean;
     fallback?: LoginFallback;
+    preferGuest?: (lastUserId: string) => boolean;
     now?: () => number;
 }
 
@@ -52,6 +53,7 @@ function setup(options: SetupOptions = {}) {
         onWarn,
         onRecovered,
         fallback: options.fallback ?? 'last-user',
+        preferGuest: options.preferGuest,
         platformLoginTimeoutMs: 20,
         now: options.now ?? (() => 1000),
     });
@@ -308,6 +310,13 @@ describe('AuthService guest fallback', () => {
         await expect(s.auth.login()).resolves.toEqual({ userId: 'old', offline: true });
     });
 
+    it('enters as the device guest when the last user is not preferred', async () => {
+        const preferGuest = vi.fn(() => true);
+        const s = setup({ fallback: 'guest', lastUser: 'old', loginError: platformFailure, preferGuest });
+        await expect(s.auth.login()).resolves.toEqual({ userId: 'guest-dev1', offline: true });
+        expect(preferGuest).toHaveBeenCalledWith('old');
+    });
+
     it('still rethrows cancellation', async () => {
         const s = setup({ fallback: 'guest' });
         const cancel = new CancelSource();
@@ -425,6 +434,31 @@ describe('AuthService session recovery', () => {
         });
         const [reconnected, token] = await Promise.all([s.auth.reconnect(), s.auth.refresh()]);
         expect([reconnected, token, calls]).toEqual([true, 'tok', 1]);
+    });
+
+    it('shares the startup login with a refresh triggered while it is pending', async () => {
+        const s = setup();
+        let calls = 0;
+        s.mock.on('POST', '/auth/login', () => {
+            calls++;
+            return { body: { token: 'tok', refreshToken: 'r', userId: 'u1', expiresIn: 60 } };
+        });
+        const login = s.auth.login();
+        const token = s.auth.refresh();
+        await expect(login).resolves.toEqual({ userId: 'u1', offline: false });
+        await expect(token).resolves.toBe('tok');
+        expect(calls).toBe(1);
+        expect(s.onUser).toHaveBeenCalledTimes(1);
+    });
+
+    it('logs in on its own when the shared startup login is cancelled', async () => {
+        const s = setup();
+        const cancel = new CancelSource();
+        const login = s.auth.login(cancel.signal);
+        const token = s.auth.refresh();
+        cancel.cancel();
+        await expect(login).rejects.toMatchObject({ kind: 'aborted' });
+        await expect(token).resolves.toBe('t1');
     });
 
     it('keeps the session when refresh fails with a server or network error', async () => {

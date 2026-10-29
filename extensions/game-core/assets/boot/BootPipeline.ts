@@ -162,7 +162,7 @@ export class BootPipeline {
                         step.name,
                     );
                 } catch (err) {
-                    error = err;
+                    error = err ?? new Error(`启动步骤 ${step.name} 失败`);
                 }
                 cancel.cancel();
                 const result: StepResult = {

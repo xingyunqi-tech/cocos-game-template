@@ -68,6 +68,10 @@ export function migrate(raw: Envelope, target: number, migrations: Record<number
     return data;
 }
 
+function scopeFilter(prefix: string): (key: string) => boolean {
+    return (key) => key.startsWith(prefix) && !key.slice(prefix.length).includes(':');
+}
+
 function hasMigrationPath(from: number, to: number, migrations: Record<number, Migration> = {}): boolean {
     for (let version = from + 1; version <= to; version++) if (!migrations[version]) return false;
     return true;
@@ -182,6 +186,7 @@ export class SaveStore {
         }
         if (data === undefined) {
             this.locks.set(fullKey, null);
+            this.backup(fullKey, raw);
             this.warn('存档版本无法迁移，使用默认值', detail);
             return options.defaults();
         }
@@ -246,8 +251,7 @@ export class SaveStore {
     }
 
     clearScope() {
-        const prefix = this.prefix;
-        const inScope = (key: string) => key.startsWith(prefix) && !key.slice(prefix.length).includes(':');
+        const inScope = scopeFilter(this.prefix);
         for (const key of Array.from(this.dirty.keys())) if (inScope(key)) this.dirty.delete(key);
         for (const key of Array.from(this.locks.keys())) if (inScope(key)) this.forgetVersion(key);
         const index = this.readIndex();
@@ -264,6 +268,20 @@ export class SaveStore {
         this.scopeGeneration++;
     }
 
+    /** 指定作用域是否有已写入或待写入的存档 */
+    hasData(scope: string): boolean {
+        return scope !== '' && this.prefixHasData(`${this.options.prefix ?? 'gc'}:${scope}:`);
+    }
+
+    private prefixHasData(prefix: string): boolean {
+        const inScope = scopeFilter(prefix);
+        if (Array.from(this.dirty.keys()).some(inScope) || this.readIndex().some(inScope)) return true;
+        return Array.from(this.registered).some((key) => {
+            const value = this.options.store.getItem(prefix + key);
+            return value !== null && value !== undefined && value !== '';
+        });
+    }
+
     /** 当前作用域没有存档时，把 from 作用域的存档移入当前作用域；返回是否移入 */
     adoptScope(from: string): boolean {
         if (from.includes(':')) throw new Error(`存档作用域不能包含冒号：${from}`);
@@ -272,11 +290,8 @@ export class SaveStore {
         const source = `${this.options.prefix ?? 'gc'}:${from}:`;
         const target = this.prefix;
         if (source === target) return false;
-        const inScope = (prefix: string) => (key: string) =>
-            key.startsWith(prefix) && !key.slice(prefix.length).includes(':');
-        const index = this.readIndex();
-        if (index.some(inScope(target))) return false;
-        const moving = index.filter(inScope(source));
+        if (this.prefixHasData(target)) return false;
+        const moving = this.readIndex().filter(scopeFilter(source));
         const moved: string[] = [];
         for (const key of moving) {
             const value = this.options.store.getItem(key);
@@ -297,7 +312,7 @@ export class SaveStore {
             this.options.store.removeItem(key);
             this.forgetVersion(key);
         }
-        this.writeIndex(this.readIndex().filter((key) => !inScope(source)(key)));
+        this.writeIndex(this.readIndex().filter((key) => !scopeFilter(source)(key)));
         for (const key of moved) this.forgetVersion(key);
         this.scopeGeneration++;
         return true;

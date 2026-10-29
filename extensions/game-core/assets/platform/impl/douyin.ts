@@ -164,6 +164,7 @@ export class DouyinRecorder implements IRecorder {
                     return;
                 }
                 this.startedAt = this.now();
+                this.ignoreLateStop = false;
                 this.state = 'recording';
                 this.pendingStart?.(true);
                 this.pendingStart = null;

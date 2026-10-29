@@ -122,6 +122,27 @@ describe('SaveStore adoptScope', () => {
         return { ...ctx, slot };
     }
 
+    it('tells whether a scope has written or pending data', () => {
+        const { save, store, slot } = withGuestSave();
+        expect(save.hasData('guest-d1')).toBe(true);
+        expect(save.hasData('7')).toBe(false);
+        expect(save.hasData('')).toBe(false);
+        save.setScope('8');
+        slot.set(profile.defaults());
+        expect(save.hasData('8')).toBe(true);
+        store.setItem('gc:u:9:profile', JSON.stringify({ v: 2, d: {} }));
+        expect(save.hasData('9')).toBe(true);
+    });
+
+    it('does not adopt into a scope whose save is missing from the index', () => {
+        const { save, store } = withGuestSave();
+        const own = JSON.stringify({ v: 2, d: { level: 9 } });
+        store.setItem('gc:u:7:profile', own);
+        save.setScope('7');
+        expect(save.adoptScope('guest-d1')).toBe(false);
+        expect(store.getItem('gc:u:7:profile')).toBe(own);
+    });
+
     it('moves the guest save into an empty current scope and removes the source', () => {
         const { save, store, slot } = withGuestSave();
         save.setScope('7');
@@ -363,11 +384,13 @@ describe('SaveStore edge cases', () => {
         });
     });
 
-    it('writes again after a version bump of a slot holding a primitive value', () => {
+    it('backs up a primitive value on a version bump and then writes again', () => {
         const { save, store } = setup();
-        store.setItem('gc:u:best', JSON.stringify({ v: 1, d: 5 }));
+        const old = JSON.stringify({ v: 1, d: 5 });
+        store.setItem('gc:u:best', old);
         const slot = save.slot<number>('best', { version: 2, defaults: () => 0, migrations: { 2: (d) => d } });
         expect(slot.get()).toBe(0);
+        expect(store.getItem('gc:u:__bak:best')).toBe(old);
         slot.set(7);
         save.flush();
         expect(JSON.parse(store.getItem('gc:u:best')!)).toEqual({ v: 2, d: 7 });
