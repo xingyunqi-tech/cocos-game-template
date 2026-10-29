@@ -1,6 +1,9 @@
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isDevVersion } from '../../scripts/check-plugins.mjs';
-import { changelogBetween, compareVersions } from '../../scripts/update-core.mjs';
+import { changelogBetween, compareVersions, installCore } from '../../scripts/update-core.mjs';
 
 const LOG = `# game-core 变更记录
 
@@ -58,5 +61,60 @@ describe('versions', () => {
         expect(isDevVersion('1.0.1-dev')).toBe(true);
         expect(isDevVersion('1.0.1-dev.2')).toBe(true);
         expect(isDevVersion('1.0.1')).toBe(false);
+    });
+});
+
+describe('installCore', () => {
+    function fixture() {
+        const base = mkdtempSync(join(tmpdir(), 'install-core-'));
+        const write = (root, version) => {
+            mkdirSync(join(root, 'extensions', 'game-core'), { recursive: true });
+            mkdirSync(join(root, 'scripts', 'plugin-locks'), { recursive: true });
+            writeFileSync(join(root, 'extensions', 'game-core', 'package.json'), JSON.stringify({ version }));
+            writeFileSync(join(root, 'scripts', 'plugin-locks', 'game-core.json'), JSON.stringify({ version }));
+        };
+        const source = join(base, 'source');
+        const root = join(base, 'root');
+        write(source, '2.0.0');
+        write(root, '1.0.0');
+        const read = (path) => JSON.parse(readFileSync(join(root, path), 'utf8')).version;
+        const leftovers = () =>
+            readdirSync(join(root, 'extensions')).concat(readdirSync(join(root, 'scripts', 'plugin-locks')));
+        return { base, source, root, read, leftovers };
+    }
+
+    it('replaces the plugin and its lock file', () => {
+        const { base, source, root, read, leftovers } = fixture();
+        installCore(source, root);
+        expect(read('extensions/game-core/package.json')).toBe('2.0.0');
+        expect(read('scripts/plugin-locks/game-core.json')).toBe('2.0.0');
+        expect(leftovers()).toEqual(['game-core', 'game-core.json']);
+        rmSync(base, { recursive: true, force: true });
+    });
+
+    it.each([1, 2, 3])('restores the original plugin when rename %i fails', (failing) => {
+        const { base, source, root, read, leftovers } = fixture();
+        let calls = 0;
+        const rename = (from, to) => {
+            if (++calls === failing) throw new Error('EPERM');
+            renameSync(from, to);
+        };
+        expect(() => installCore(source, root, rename)).toThrow('EPERM');
+        expect(read('extensions/game-core/package.json')).toBe('1.0.0');
+        expect(read('scripts/plugin-locks/game-core.json')).toBe('1.0.0');
+        expect(leftovers()).toEqual(['game-core', 'game-core.json']);
+        rmSync(base, { recursive: true, force: true });
+    });
+
+    it('reports where the original plugin is when restoring it also fails', () => {
+        const { base, source, root } = fixture();
+        let calls = 0;
+        const rename = (from, to) => {
+            if (++calls >= 2) throw new Error(`EPERM ${calls}`);
+            renameSync(from, to);
+        };
+        expect(() => installCore(source, root, rename)).toThrow(/EPERM 2.*EPERM 3.*game-core\.old/);
+        expect(readdirSync(join(root, 'extensions'))).toEqual(['game-core.old']);
+        rmSync(base, { recursive: true, force: true });
     });
 });

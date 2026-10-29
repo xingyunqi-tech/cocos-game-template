@@ -216,8 +216,88 @@ describe('RemoteConfig fallback', () => {
                 50,
                 () => null,
             ),
-        ).resolves.toBe('defaults');
-        expect(config.all()).toEqual({ a: 1, b: 2 });
+        ).resolves.toBe('cache');
+        expect(config.all()).toEqual({ a: 1, b: 7 });
+    });
+
+    it('keeps the loaded remote values while reloading and when the reload fails without cache', async () => {
+        const config = new RemoteConfig({ a: 1 });
+        await config.load(() => Promise.resolve({ a: 5 }));
+        let fail: (err: Error) => void = () => undefined;
+        const reload = config.load(() => new Promise((_, reject) => (fail = reject)));
+        expect(config.get('a')).toBe(5);
+        fail(new Error('offline'));
+        await expect(reload).resolves.toBe('remote');
+        expect(config.get('a')).toBe(5);
+        await expect(config.load()).resolves.toBe('defaults');
+        expect(config.get('a')).toBe(1);
+    });
+});
+
+describe('RemoteConfig merging', () => {
+    it('merges nested objects and ignores values whose type differs from the default', async () => {
+        const onInvalid = vi.fn();
+        const config = new RemoteConfig(
+            { reward: { coins: 10, gems: 1 }, enabled: false, levels: [1], extra: null },
+            onInvalid,
+        );
+        await config.load(() =>
+            Promise.resolve({
+                reward: { coins: 20, gems: '2' },
+                enabled: 'false',
+                levels: { 0: 2 },
+                extra: { any: true },
+                added: 3,
+            } as never),
+        );
+        expect(config.all()).toEqual({
+            reward: { coins: 20, gems: 1 },
+            enabled: false,
+            levels: [1],
+            extra: { any: true },
+            added: 3,
+        });
+        expect(onInvalid.mock.calls).toEqual([
+            ['reward.gems', '2'],
+            ['enabled', 'false'],
+            ['levels', { 0: 2 }],
+        ]);
+    });
+});
+describe('RemoteConfig validation', () => {
+    it('checks array items against the default item type', async () => {
+        const config = new RemoteConfig({ levels: [1, 2], tags: [] as string[] });
+        await config.load(() => Promise.resolve({ levels: ['1'], tags: ['a', 1] } as never));
+        expect(config.all()).toEqual({ levels: [1, 2], tags: ['a', 1] });
+    });
+
+    it('ignores __proto__ keys and does not compare keys with inherited members', async () => {
+        const config = new RemoteConfig<Record<string, unknown>>({ a: 1 });
+        await config.load(() => Promise.resolve(JSON.parse('{"__proto__": {"polluted": 1}, "toString": 2}')));
+        expect(config.get('polluted')).toBeUndefined();
+        expect(config.get('toString')).toBe(2);
+        expect(Object.getPrototypeOf(config.all())).toBe(Object.prototype);
+    });
+
+    it('treats a non-object response or cache as a failure and keeps the current values', async () => {
+        const config = new RemoteConfig({ a: 1 });
+        await config.load(() => Promise.resolve({ a: 5 }));
+        await expect(
+            config.load(
+                () => Promise.resolve(null as never),
+                50,
+                () => [9] as never,
+            ),
+        ).resolves.toBe('remote');
+        expect(config.get('a')).toBe(5);
+    });
+
+    it('reports invalid values when loading but not again when defaults change', async () => {
+        const onInvalid = vi.fn();
+        const config = new RemoteConfig<Record<string, unknown>>({ on: false }, onInvalid);
+        await config.load(() => Promise.resolve({ on: 'yes' }));
+        config.setDefaults({ other: 1 });
+        expect(onInvalid).toHaveBeenCalledTimes(1);
     });
 });
 

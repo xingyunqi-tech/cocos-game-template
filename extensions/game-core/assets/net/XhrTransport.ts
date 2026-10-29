@@ -37,10 +37,24 @@ export class XhrTransport implements HttpTransport {
                 });
             }
 
-            xhr.open(request.method, request.url, true);
-            xhr.timeout = request.timeoutMs;
-            for (const [name, value] of Object.entries(request.headers))
-                xhr.setRequestHeader(name.toLowerCase(), value);
+            const fail = (err: unknown) => {
+                const reason = err instanceof Error ? err.message : String(err);
+                finish(() => reject(new HttpError('network', `请求发送失败：${reason}`)));
+                try {
+                    xhr.abort();
+                } catch {
+                    return;
+                }
+            };
+            try {
+                xhr.open(request.method, request.url, true);
+                xhr.timeout = request.timeoutMs;
+                for (const [name, value] of Object.entries(request.headers))
+                    xhr.setRequestHeader(name.toLowerCase(), value);
+            } catch (err) {
+                fail(err);
+                return;
+            }
             xhr.onload = () =>
                 finish(() =>
                     resolve({
@@ -52,7 +66,11 @@ export class XhrTransport implements HttpTransport {
             xhr.ontimeout = () => finish(() => reject(new HttpError('timeout', `请求超时 ${request.timeoutMs}ms`)));
             xhr.onerror = () => finish(() => reject(new HttpError('network', '网络错误')));
             xhr.onabort = () => finish(() => reject(new HttpError('aborted', '请求已取消')));
-            xhr.send(request.body ?? null);
+            try {
+                xhr.send(request.body ?? null);
+            } catch (err) {
+                fail(err);
+            }
         });
     }
 }

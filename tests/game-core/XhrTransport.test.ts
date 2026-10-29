@@ -98,6 +98,29 @@ describe('XhrTransport', () => {
         expect(FakeXhr.last?.aborted).toBe(true);
     });
 
+    it('rejects with a network error and stops its timer when the request cannot be sent', async () => {
+        vi.useFakeTimers();
+        try {
+            const spy = vi.spyOn(FakeXhr.prototype, 'setRequestHeader').mockImplementation(() => {
+                throw new SyntaxError('invalid header value');
+            });
+            const pending = new XhrTransport().send(request());
+            await expect(pending).rejects.toMatchObject({
+                kind: 'network',
+                message: '请求发送失败：invalid header value',
+            });
+            spy.mockRestore();
+            const sending = vi.spyOn(FakeXhr.prototype, 'send').mockImplementation(() => {
+                throw new Error('bad state');
+            });
+            await expect(new XhrTransport().send(request())).rejects.toMatchObject({ kind: 'network' });
+            sending.mockRestore();
+            expect(vi.getTimerCount()).toBe(0);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('maps network errors', async () => {
         const pending = new XhrTransport().send(request());
         FakeXhr.last?.onerror?.();

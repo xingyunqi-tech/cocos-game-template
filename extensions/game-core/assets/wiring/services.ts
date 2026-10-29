@@ -64,7 +64,10 @@ payment.onLateResult((item, result) =>
 );
 export const deviceSave = new SaveStore({ store: localStore, prefix: 'gc:d', onWarn: saveWarn });
 export const userSave = new SaveStore({ store: localStore, prefix: 'gc:u', requireScope: true, onWarn: saveWarn });
-export const remoteConfig = new RemoteConfig<RemoteSettingsMap>({ reviewMode: false, shareReward: false });
+export const remoteConfig = new RemoteConfig<RemoteSettingsMap>(
+    { reviewMode: false, shareReward: false },
+    (key, value) => log.warn('远程配置类型与默认值不一致，已忽略', { key, value }),
+);
 
 export const coreOptions = {
     /** 启动时显示健康游戏忠告加载页 */

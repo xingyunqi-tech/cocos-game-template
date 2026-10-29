@@ -201,7 +201,7 @@ wallet.onChange((key, amount) => refreshLabel(key, amount));
 
 - `track(event, params)` 埋点，`reportError(err, source)` 错误上报；公共参数含版本、平台、envVersion。配置 `trackPath` 时错误上报经过限流：来源、信息与上下文相同的错误 60 秒内只上报一次，每分钟最多 30 条，合并次数 `repeated` 与丢弃数 `dropped` 随下一次上报或切后台时补报；日志输出不限流
 - `config.json` 的 `trackPath` 非空时批量上报到该接口（20 条或 10 秒一批，切后台立即发送），错误以 `error` 事件上报；上报请求携带登录 token，401 时不刷新 token，与网络错误、5xx 一样指数退避重试，退避期间不提前发送；其他 4xx 以及 2xx 但响应解析失败或业务校验失败时丢弃该批
-- `remoteConfigPath` 非空时启动拉取远程配置，失败使用上次缓存，再失败使用默认值
+- `remoteConfigPath` 非空时启动拉取远程配置，失败使用上次缓存，再失败使用默认值；远程值按默认值深合并，类型与默认值不一致的项忽略并输出警告（如布尔项下发字符串 `"false"`）
 - 业务配置项扩展 `RemoteSettingsMap` 并在模块顶层提供默认值，`remoteConfig.get` 类型自动推导；未提供默认值且远程未下发的项读到 `undefined`：
 
 ```ts

@@ -16,6 +16,10 @@
 - 错误上报到 `trackPath` 时经过 `ErrorThrottle`：来源、信息与上下文相同的错误 60 秒内只上报一次，每分钟最多 30 条；合并次数（`context.repeated`）与丢弃数（`context.dropped`）随下一次上报或切后台时补报；日志输出不受影响；新增 `ErrorThrottle`、类型 `ErrorThrottleOptions`
 - 上传：`REMOTE_UPLOAD_COMMAND` 中的 `{dir}` 按所在引号替换为对环境变量 `REMOTE_DIR` 的引用；抖音上传被信号中断时删除临时 token 目录；构建与上传被中断时按信号返回退出码（SIGINT 130、SIGTERM 143、SIGHUP 129）
 - 配置表：字段名为 `__proto__`、int 超出安全整数范围、float 溢出时报错
+- `RemoteConfig`：远程值按默认值深合并，类型与默认值不一致的项（数组按元素类型）忽略并在加载时经构造参数 `onInvalid` 报告（`remoteConfig` 输出警告日志），`__proto__` 键忽略；重新加载期间、失败或返回非对象且没有缓存时保留当前值，`load()` 不传拉取函数时恢复默认值；新增类型 `InvalidRemoteValue`
+- HTTP：调用方传入的 `accept`、`authorization` 等请求头不区分大小写，不再与默认的 `Accept`、`Authorization` 同时发出；`XhrTransport` 的 `open`、`setRequestHeader`、`send` 抛错时以 `network` 失败并清理计时器
+- `coreUi.confirm` 默认确认框的节点被外部移除或销毁时返回 `false`
+- 升级脚本：替换 game-core 或锁定文件失败时恢复原插件与锁定文件，不留下 `game-core.next`；恢复也失败时提示原插件所在目录
 - 上传检查读取带 md5 后缀的 `src/settings.<hash>.json`；缺少、多个或无法解析时拒绝上传
 
 ## 2.2.0（2026-10-29）

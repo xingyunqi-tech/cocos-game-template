@@ -45,6 +45,43 @@ export function localChanges(root = ROOT) {
     return diff(JSON.parse(readFileSync(lockFile, 'utf8')).files, snapshot(join(root, CORE_DIR)));
 }
 
+/** 用 source 中的 game-core 与锁定文件替换 root 中的；失败时恢复原插件并清理临时目录 */
+export function installCore(source, root = ROOT, rename = renameSync) {
+    const target = join(root, CORE_DIR);
+    const old = `${target}.old`;
+    const staged = `${target}.next`;
+    const lock = join(root, LOCK_FILE);
+    const stagedLock = `${lock}.next`;
+    rmSync(old, { recursive: true, force: true });
+    try {
+        cpSync(join(source, CORE_DIR), staged, { recursive: true });
+        cpSync(join(source, LOCK_FILE), stagedLock);
+        const hadTarget = existsSync(target);
+        if (hadTarget) rename(target, old);
+        let installed = false;
+        try {
+            rename(staged, target);
+            installed = true;
+            rename(stagedLock, lock);
+        } catch (err) {
+            try {
+                if (installed) rmSync(target, { recursive: true, force: true });
+                if (hadTarget) rename(old, target);
+            } catch (restoreErr) {
+                throw new Error(
+                    `替换 game-core 失败（${err.message}），恢复也失败（${restoreErr.message}）：原插件在 ${old}，关闭编辑器后再次运行本脚本会自动恢复`,
+                    { cause: restoreErr },
+                );
+            }
+            throw err;
+        }
+    } finally {
+        rmSync(staged, { recursive: true, force: true });
+        rmSync(stagedLock, { force: true });
+    }
+    rmSync(old, { recursive: true, force: true });
+}
+
 function readVersion(dir) {
     const file = join(dir, CORE_DIR, 'package.json');
     return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')).version ?? '') : '';
@@ -108,21 +145,7 @@ function main() {
         const fetched = readVersion(work);
         if (fetched !== version) throw new Error(`${tag} 中 game-core 版本为 ${fetched}，与 ${version} 不一致`);
         if (!existsSync(join(work, LOCK_FILE))) throw new Error(`${tag} 中缺少 ${LOCK_FILE}`);
-        const staged = `${target}.next`;
-        rmSync(staged, { recursive: true, force: true });
-        rmSync(old, { recursive: true, force: true });
-        cpSync(join(work, CORE_DIR), staged, { recursive: true });
-        const hadTarget = existsSync(target);
-        if (hadTarget) renameSync(target, old);
-        try {
-            renameSync(staged, target);
-        } catch (err) {
-            if (hadTarget) renameSync(old, target);
-            rmSync(staged, { recursive: true, force: true });
-            throw err;
-        }
-        rmSync(old, { recursive: true, force: true });
-        cpSync(join(work, LOCK_FILE), join(ROOT, LOCK_FILE));
+        installCore(work);
         console.log(`✓ game-core ${before || '（无）'} → ${version}`);
         const notes = changelogBetween(readFileSync(join(ROOT, CORE_DIR, 'CHANGELOG.md'), 'utf8'), before, version);
         if (notes.length > 0) {

@@ -8,7 +8,7 @@ export type { UserReadyListener, UserState } from './boot/Lifecycle';
 export { retry } from './boot/retry';
 export { getEnv } from './config/env';
 export { RemoteConfig } from './config/RemoteConfig';
-export type { RemoteSettingsMap } from './config/RemoteConfig';
+export type { InvalidRemoteValue, RemoteSettingsMap } from './config/RemoteConfig';
 export { Tables, TableStore } from './config/Tables';
 export { loadAsset, loadBundle, preloadBundle } from './config/Bundles';
 export { SoundService } from './ui/Sound';

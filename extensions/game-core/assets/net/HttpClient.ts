@@ -56,6 +56,15 @@ export function buildUrl(baseUrl: string, url: string, query?: Record<string, Qu
     return `${full}${full.includes('?') ? '&' : '?'}${pairs.join('&')}`;
 }
 
+/** 请求头名不区分大小写；replace 为 false 时已有同名头则保留 */
+function setHeader(headers: Record<string, string>, name: string, value: string, replace: boolean) {
+    const lower = name.toLowerCase();
+    const existing = Object.keys(headers).filter((key) => key.toLowerCase() === lower);
+    if (existing.length > 0 && !replace) return;
+    for (const key of existing) delete headers[key];
+    headers[name] = value;
+}
+
 function isRetryable(err: unknown): boolean {
     if (!(err instanceof HttpError)) return false;
     if (err.kind === 'network' || err.kind === 'timeout') return true;
@@ -238,17 +247,16 @@ export class HttpClient {
 
     private async send(request: HttpRequest, token: string | null): Promise<HttpResponse> {
         if (request.signal?.cancelled) throw abortedError();
-        const headers: Record<string, string> = { Accept: 'application/json', ...request.headers };
+        const headers: Record<string, string> = { ...request.headers };
+        setHeader(headers, 'Accept', 'application/json', false);
         let body: string | undefined;
         if (request.body !== undefined) {
             body = typeof request.body === 'string' ? request.body : JSON.stringify(request.body);
-            if (!Object.keys(headers).some((name) => name.toLowerCase() === 'content-type')) {
-                headers['Content-Type'] = 'application/json';
-            }
+            setHeader(headers, 'Content-Type', 'application/json', false);
         }
         if (token) {
             const [name, value] = this.options.authHeader?.(token) ?? ['Authorization', `Bearer ${token}`];
-            headers[name] = value;
+            setHeader(headers, name, value, true);
         }
 
         const release = await this.semaphore.acquire(request.signal);

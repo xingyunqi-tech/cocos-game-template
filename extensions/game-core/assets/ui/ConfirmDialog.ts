@@ -1,4 +1,4 @@
-import { UITransform } from 'cc';
+import { Node, UITransform } from 'cc';
 import { THEME, addButton, addLabel, addPanel, fillRect, openModal, type LayerName } from './kit';
 
 export interface ConfirmOptions {
@@ -17,6 +17,7 @@ const TITLE_AREA = 110;
 const LINK_HEIGHT = 60;
 const BUTTON_AREA = 130;
 
+/** 弹窗节点被外部移除或销毁时返回 false */
 export function showConfirm(options: ConfirmOptions): Promise<boolean> {
     return new Promise((resolve) => {
         const modal = openModal(options.layer ?? 'LayerSystem', 'ConfirmDialog');
@@ -24,6 +25,10 @@ export function showConfirm(options: ConfirmOptions): Promise<boolean> {
             resolve(false);
             return;
         }
+        modal.root.once(Node.EventType.NODE_DESTROYED, () => resolve(false));
+        modal.root.on(Node.EventType.PARENT_CHANGED, () => {
+            if (!modal.root.parent) resolve(false);
+        });
         const links = options.links ?? [];
         const panel = addPanel(modal.root, WIDTH, 0);
         const title = addLabel(panel, options.title ?? '提示', { fontSize: THEME.titleSize, width: WIDTH - 60 });
@@ -46,8 +51,8 @@ export function showConfirm(options: ConfirmOptions): Promise<boolean> {
             button.setPosition(0, -height / 2 + BUTTON_AREA + (links.length - 1 - index) * LINK_HEIGHT + 20);
         });
         const finish = (result: boolean) => {
-            modal.close();
             resolve(result);
+            modal.close();
         };
         const hasCancel = options.cancelText !== null;
         const confirm = addButton(panel, options.confirmText ?? '确定', () => finish(true));

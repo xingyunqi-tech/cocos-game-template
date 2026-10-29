@@ -47,6 +47,19 @@ describe('HttpClient', () => {
         expect(seen[1]['content-type']).toBe('application/x-www-form-urlencoded');
     });
 
+    it('keeps one accept and one authorization header whatever their letter case', async () => {
+        const seen: Array<Record<string, string>> = [];
+        const mock = new MockTransport().on('GET', '/me', (req) => {
+            seen.push(req.headers);
+            return { body: {} };
+        });
+        const tokenProvider: TokenProvider = { getToken: () => 't', refresh: () => Promise.resolve(null) };
+        await client(mock, { tokenProvider }).get('me', undefined, {
+            headers: { accept: 'text/plain', authorization: 'Basic x' },
+        });
+        expect(seen[0]).toEqual({ accept: 'text/plain', Authorization: 'Bearer t' });
+    });
+
     it('rejects non-2xx responses with http errors', async () => {
         const mock = new MockTransport().on('GET', '/missing', () => ({ status: 404, body: { msg: 'no' } }));
         await expect(client(mock).get('missing')).rejects.toMatchObject({ kind: 'http', status: 404 });
