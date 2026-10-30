@@ -2,6 +2,7 @@ import { _decorator, Color, JsonAsset, Label, Node, resources, UITransform } fro
 import { Root } from 'db://oops-framework/core/Root';
 import { GuiPromptConfig } from 'db://oops-framework/core/gui/GuiPromptConfig';
 import { bootPipeline, coreOptions, getDesignInset, healthNotice, initGameCore, runGameEntry } from '../core';
+import { configProblem } from '../config/env';
 import { reportError } from '../monitor/errors';
 import { createLogger } from '../monitor/logger';
 import { track } from '../monitor/track';
@@ -54,12 +55,20 @@ export class GameRoot extends Root {
     }
 
     private async loadConfigStage() {
+        let config: JsonAsset;
         try {
-            await retry(loadConfig, CONFIG_LOAD_ATTEMPTS);
+            config = await retry(loadConfig, CONFIG_LOAD_ATTEMPTS);
         } catch (err) {
             console.error('[game-core] config.json 加载失败', err);
             this.busy = false;
             this.showFallback(coreText.configFailed);
+            return;
+        }
+        const problem = configProblem(config.json);
+        if (problem) {
+            console.error(`[game-core] ${problem}`);
+            this.busy = false;
+            this.showFallback(coreText.initFailed);
             return;
         }
         this.hideFallback();

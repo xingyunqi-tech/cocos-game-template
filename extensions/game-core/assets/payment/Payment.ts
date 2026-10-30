@@ -29,6 +29,8 @@ export class PaymentService {
     private readonly lateListeners: LatePayListener[] = [];
     private orders: OrderStore | null = null;
     private recovering: Promise<void> | null = null;
+    /** 本次运行中已回调过最终结果的订单号 */
+    private readonly settledOrders = new Set<string>();
     simulate: PayResult['result'] | null = null;
 
     constructor(
@@ -101,8 +103,11 @@ export class PaymentService {
             if (timedOut) {
                 void paid.then((late) => {
                     const result = late.orderId || !orderId ? { ...late } : { ...late, orderId };
-                    if (result.orderId && result.result !== 'pending') this.forgetOrder(result.orderId);
-                    else if (result.orderId) this.rememberOrder(item, result.orderId);
+                    if (result.orderId && this.settledOrders.has(result.orderId)) return;
+                    if (result.orderId && result.result !== 'pending') {
+                        this.settledOrders.add(result.orderId);
+                        this.forgetOrder(result.orderId);
+                    } else if (result.orderId) this.rememberOrder(item, result.orderId);
                     this.emitLate(item, result);
                 });
             }
@@ -132,6 +137,7 @@ export class PaymentService {
             }
             const result = await this.queryOrder(order.orderId);
             if (result.result === 'pending' || !this.forgetOrder(order.orderId)) continue;
+            this.settledOrders.add(order.orderId);
             this.emitLate(order.item, result.orderId ? result : { ...result, orderId: order.orderId });
         }
     }

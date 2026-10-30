@@ -323,6 +323,75 @@ describe('HttpClient concurrency and cancellation', () => {
         expect(seen).toEqual(['Bearer old', 'Bearer new', 'Bearer new']);
     });
 
+    it('refreshes on 401 for a request that waited on a failed proactive refresh', async () => {
+        let token = 'old';
+        let expiring = true;
+        let failExpiring: () => void = () => undefined;
+        const refresh = vi.fn((reason?: 'expiring' | 'expired') => {
+            if (reason === 'expiring') {
+                expiring = false;
+                return new Promise<string | null>((resolve) => (failExpiring = () => resolve(null)));
+            }
+            return new Promise<string>((resolve) =>
+                setTimeout(() => {
+                    token = 'new';
+                    resolve(token);
+                }, 10),
+            );
+        });
+        const mock = new MockTransport().on('GET', '/me', (req) =>
+            req.headers.Authorization === 'Bearer new' ? { body: {} } : { status: 401 },
+        );
+        const http = client(mock, { tokenProvider: { getToken: () => token, refresh, shouldRefresh: () => expiring } });
+        const first = http.get('me');
+        await vi.waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+        const second = http.get('me');
+        failExpiring();
+        await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+        expect(refresh.mock.calls).toEqual([['expiring'], ['expired']]);
+    });
+
+    it('refreshes as expired when a 401 joins a proactive refresh that fails', async () => {
+        let token = 'old';
+        let expiring = false;
+        let failExpiring: () => void = () => undefined;
+        const refresh = vi.fn((reason?: 'expiring' | 'expired') => {
+            if (reason === 'expiring') {
+                return new Promise<string | null>((resolve) => (failExpiring = () => resolve(null)));
+            }
+            token = 'new';
+            return Promise.resolve(token);
+        });
+        let reject401: () => void = () => undefined;
+        const transport: HttpTransport = {
+            send: (req: TransportRequest) => {
+                if (req.headers.Authorization === 'Bearer new') {
+                    return Promise.resolve({ status: 200, body: '{}', headers: {} });
+                }
+                if (req.url.endsWith('/slow')) {
+                    return new Promise<TransportResponse>(
+                        (resolve) => (reject401 = () => resolve({ status: 401, body: '', headers: {} })),
+                    );
+                }
+                return Promise.resolve({ status: 401, body: '', headers: {} });
+            },
+        };
+        const http = client(transport, {
+            tokenProvider: { getToken: () => token, refresh, shouldRefresh: () => expiring },
+        });
+        const slow = http.get('slow');
+        await vi.waitFor(() => expect(reject401).not.toBe(undefined));
+        expiring = true;
+        const proactive = http.get('me');
+        await vi.waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+        expiring = false;
+        reject401();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        failExpiring();
+        await expect(Promise.all([slow, proactive])).resolves.toHaveLength(2);
+        expect(refresh.mock.calls).toEqual([['expiring'], ['expired']]);
+    });
+
     it('reports final failures through onError but not successful retries', async () => {
         const onError = vi.fn();
         let calls = 0;

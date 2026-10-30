@@ -1,5 +1,12 @@
 # game-core 变更记录
 
+## 2.3.1
+
+- 小游戏广告：同一广告实例上一次展示尚未结束（如 `AdService` 已按超时返回）时再次展示，上一次展示以 `failed` / `show_failed` 结束、解绑监听并停止其重试，之后的关闭事件只回调本次展示，同一次观看只产生一个 `completed`；被取代的插屏展示不销毁实例
+- 支付：`recoverOrders` 已回调过最终结果的订单，之后到达的平台迟到结果不再经 `onLateResult` 回调，也不再写回待确认订单
+- HTTP：主动刷新（`expiring`）失败后，等待它的请求不再立即发起第二次主动刷新，返回 401 时按过期刷新；401 引起的刷新遇到进行中的主动刷新时，主动刷新失败后按过期刷新
+- `GameRoot`：`config.json` 的 `type` 没有对应环境配置（或配置不是对象）时输出错误日志并显示 `coreText.initFailed`
+
 ## 2.3.0（2026-10-29）
 
 - `IPayment.pay(item, hooks?)`：实现在服务端订单创建后调用 `hooks.onOrder(orderId)`，平台超时返回的 `pending` 结果带上该 `orderId`；`payment.onLateResult(listener)` 回调超时之后平台给出的结果（实现报告过订单号时带上该订单号），埋点事件为 `pay_late_result`；新增类型 `PayHooks`、`LatePayListener`

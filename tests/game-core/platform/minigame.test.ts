@@ -349,6 +349,51 @@ describe('MiniGameAdProvider', () => {
         expect(ads[0].listeners.close).toHaveLength(0);
     });
 
+    it('ends an unsettled show as failed when the same ad is shown again', async () => {
+        const { api, ads } = fakeApi();
+        const provider = new MiniGameAdProvider(asApi(api), { recreateInterstitialAfterShow: false });
+        const first = provider.showRewarded('u1');
+        await flush();
+        const second = provider.showRewarded('u1');
+        await expect(first).resolves.toMatchObject({ result: 'failed', reason: 'show_failed' });
+        await flush();
+        expect(ads[0].listeners.close).toHaveLength(1);
+        ads[0].close({ isEnded: true });
+        await expect(second).resolves.toEqual({ result: 'completed' });
+    });
+
+    it('stops the retry of a superseded show', async () => {
+        const { api, ads } = fakeApi();
+        const provider = new MiniGameAdProvider(asApi(api), { recreateInterstitialAfterShow: false });
+        provider.preloadRewarded('u1');
+        let finishLoad: () => void = () => undefined;
+        ads[0].showResults = [{ errMsg: 'not ready' }];
+        ads[0].load = () => new Promise<void>((resolve) => (finishLoad = resolve));
+        const first = provider.showRewarded('u1');
+        await flush();
+        const second = provider.showRewarded('u1');
+        await expect(first).resolves.toMatchObject({ result: 'failed' });
+        finishLoad();
+        await flush();
+        expect(ads[0].showCalls).toBe(2);
+        ads[0].close({ isEnded: true });
+        await expect(second).resolves.toEqual({ result: 'completed' });
+    });
+
+    it('keeps the interstitial instance when an unsettled show is superseded', async () => {
+        const { api, ads } = fakeApi();
+        const provider = new MiniGameAdProvider(asApi(api), { recreateInterstitialAfterShow: true });
+        const first = provider.showInterstitial('u1');
+        await flush();
+        const second = provider.showInterstitial('u1');
+        await expect(first).resolves.toMatchObject({ result: 'failed' });
+        expect(ads[0].destroyed).toBe(false);
+        await flush();
+        ads[0].close();
+        await expect(second).resolves.toEqual({ result: 'shown' });
+        expect(ads[0].destroyed).toBe(true);
+    });
+
     it('preloads a rewarded ad once and reuses it when shown', async () => {
         const { api, ads } = fakeApi();
         const provider = new MiniGameAdProvider(asApi(api), { recreateInterstitialAfterShow: false });

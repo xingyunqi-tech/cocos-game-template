@@ -120,33 +120,42 @@ interface PresentableAd<C> {
     offError(listener: (err: ApiError) => void): void;
 }
 
+/** 广告实例上尚未结束的展示，同一实例再次展示时以失败结束 */
+const presenting = new WeakMap<object, () => void>();
+
 function present<C, R>(
     ad: PresentableAd<C>,
     closed: (res?: C) => R,
     failed: (err: unknown) => R,
     afterShown?: () => void,
 ): Promise<R> {
+    presenting.get(ad)?.();
     return new Promise((resolve) => {
         let shown = false;
         let settled = false;
-        const finish = (result: R) => {
+        const finish = (result: R, superseded = false) => {
             if (settled) return;
             settled = true;
             ad.offClose(onClose);
             ad.offError(onError);
-            if (shown) afterShown?.();
+            if (presenting.get(ad) === supersede) presenting.delete(ad);
+            if (shown && !superseded) afterShown?.();
             resolve(result);
         };
         const onClose = (res?: C) => finish(closed(res));
         const onError = (err: ApiError) => {
             if (shown) finish(failed(err));
         };
+        const supersede = () => finish(failed(new Error('ad superseded')), true);
+        presenting.set(ad, supersede);
         ad.onClose(onClose);
         ad.onError(onError);
         const show = () =>
-            ad.show().then(() => {
-                shown = true;
-            });
+            settled
+                ? Promise.resolve()
+                : ad.show().then(() => {
+                      shown = true;
+                  });
         show()
             .catch(() => ad.load().then(show))
             .catch((err: unknown) => finish(failed(err)));

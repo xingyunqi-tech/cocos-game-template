@@ -27,3 +27,12 @@ interface GameConfigInternals {
 export function gameConfigData(): { type: string; config: Record<string, unknown> } {
     return (oops.config.game as unknown as GameConfigInternals)._data;
 }
+
+/** config.json 的 type 没有对应环境配置时返回错误信息 */
+export function configProblem(json: unknown): string | null {
+    const data = json as { type?: unknown; config?: Record<string, unknown> } | null;
+    const type = typeof data?.type === 'string' ? data.type : '';
+    const env = data?.config && Object.prototype.hasOwnProperty.call(data.config, type) ? data.config[type] : null;
+    if (env && typeof env === 'object' && !Array.isArray(env)) return null;
+    return `config.json 的 type「${type}」没有对应的环境配置`;
+}

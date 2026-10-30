@@ -143,6 +143,7 @@ export class HttpClient {
     private readonly errorListeners: HttpErrorListener[] = [];
     private readonly semaphore: Semaphore;
     private refreshing: Promise<string | null> | null = null;
+    private refreshingReason: 'expiring' | 'expired' | null = null;
     private readonly sleep: (ms: number) => Promise<void>;
 
     constructor(private readonly options: HttpClientOptions) {
@@ -215,8 +216,11 @@ export class HttpClient {
     private async sendWithAuth(request: HttpRequest): Promise<HttpResponse> {
         const provider = request.skipAuth ? undefined : this.options.tokenProvider;
         if (!provider) return this.send(request, null);
+        const awaitedReason = this.refreshingReason;
         let refreshed = this.refreshing ? await cancellable(this.refreshing, request.signal) : undefined;
-        if (refreshed === undefined && !request.skipRefresh && provider.shouldRefresh?.()) {
+        const proactiveFailed = refreshed === null && awaitedReason === 'expiring';
+        if (proactiveFailed) refreshed = undefined;
+        if (refreshed === undefined && !proactiveFailed && !request.skipRefresh && provider.shouldRefresh?.()) {
             refreshed = (await cancellable(this.refreshToken(provider, 'expiring'), request.signal)) ?? undefined;
         }
         const used = provider.getToken();
@@ -233,13 +237,19 @@ export class HttpClient {
         }
     }
 
+    /** 进行中的主动刷新失败时，401 引起的刷新在其后按过期刷新 */
     private refreshToken(provider: TokenProvider, reason: 'expiring' | 'expired'): Promise<string | null> {
+        if (this.refreshing && this.refreshingReason === 'expiring' && reason === 'expired') {
+            return this.refreshing.then((token) => token ?? this.refreshToken(provider, 'expired'));
+        }
         if (!this.refreshing) {
+            this.refreshingReason = reason;
             this.refreshing = provider
                 .refresh(reason)
                 .catch(() => null)
                 .finally(() => {
                     this.refreshing = null;
+                    this.refreshingReason = null;
                 });
         }
         return this.refreshing;

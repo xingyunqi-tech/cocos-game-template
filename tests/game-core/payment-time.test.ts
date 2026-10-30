@@ -235,6 +235,68 @@ describe('PaymentService pending orders', () => {
         }
     });
 
+    it('reports an order once when its late result arrives after recovery', async () => {
+        vi.useFakeTimers();
+        try {
+            const orders = memoryOrders();
+            const late = vi.fn();
+            const service = new PaymentService(undefined, 1000, () => 0);
+            service.onLateResult(late);
+            service.setOrderStore(orders.store);
+            let finish: (result: PayResult) => void = () => undefined;
+            service.setImplementation({
+                supported: true,
+                pay: (_item, hooks) => {
+                    hooks?.onOrder('o1');
+                    return new Promise<PayResult>((r) => (finish = r));
+                },
+                queryOrder: () => Promise.resolve<PayResult>({ result: 'success', orderId: 'o1' }),
+            });
+            const pending = service.pay(item);
+            vi.advanceTimersByTime(1000);
+            await pending;
+            await service.recoverOrders();
+            expect(late).toHaveBeenCalledTimes(1);
+            finish({ result: 'success' });
+            await vi.advanceTimersByTimeAsync(0);
+            expect(late).toHaveBeenCalledTimes(1);
+            expect(orders.current()).toEqual([]);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('keeps a recovered order out of the store when a late pending result arrives', async () => {
+        vi.useFakeTimers();
+        try {
+            const orders = memoryOrders();
+            const late = vi.fn();
+            const service = new PaymentService(undefined, 1000, () => 0);
+            service.onLateResult(late);
+            service.setOrderStore(orders.store);
+            let finish: (result: PayResult) => void = () => undefined;
+            service.setImplementation({
+                supported: true,
+                pay: (_item, hooks) => {
+                    hooks?.onOrder('o1');
+                    return new Promise<PayResult>((r) => (finish = r));
+                },
+                queryOrder: () => Promise.resolve<PayResult>({ result: 'success', orderId: 'o1' }),
+            });
+            const pending = service.pay(item);
+            vi.advanceTimersByTime(1000);
+            await pending;
+            await service.recoverOrders();
+            expect(late).toHaveBeenCalledTimes(1);
+            finish({ result: 'pending' });
+            await vi.advanceTimersByTimeAsync(0);
+            expect(late).toHaveBeenCalledTimes(1);
+            expect(orders.current()).toEqual([]);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('keeps the original time when a late result is still pending', async () => {
         vi.useFakeTimers();
         try {
