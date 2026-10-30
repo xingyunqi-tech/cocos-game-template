@@ -9,12 +9,13 @@ import { installGmButton } from './debug/GmPanel';
 import { errorReporter, ErrorThrottle, reportError } from './monitor/errors';
 import { createLogger, logHub } from './monitor/logger';
 import { track, tracker } from './monitor/track';
-import { isPermanentUploadError, TrackUploader } from './monitor/TrackUploader';
+import { isPermanentUploadError, TrackUploader, type UploadRecord } from './monitor/TrackUploader';
 import { HttpClient } from './net/HttpClient';
 import type { HttpTransport } from './net/types';
 import { XhrTransport } from './net/XhrTransport';
 import type { IPlatform } from './platform/types';
 import type { KeyValueStore } from './save/KeyValueStore';
+import { utf8Bytes } from './save/SaveStore';
 import { auth, registerLoginStep } from './wiring/auth';
 import { registerCoreMocks } from './wiring/mocks';
 import { registerRemoteConfigStep } from './wiring/remote';
@@ -59,6 +60,9 @@ export { coreText } from './ui/strings';
 const log = createLogger('game-core');
 
 export const TABLES_DIR = 'tables';
+/** 切后台时最多保存的未上报埋点条数与字节数，超出时保留最新的 */
+export const TRACK_PERSIST_MAX = 200;
+export const TRACK_PERSIST_MAX_BYTES = 100 * 1024;
 
 registerLoginStep();
 bootPipeline.register(
@@ -181,7 +185,21 @@ function setupCore(env: IConfigEnvironment) {
     if (env.httpMock) registerCoreMocks(mockTransport);
     if (env.trackPath) {
         const path = env.trackPath;
+        const queue = deviceSave.slot('track_queue', {
+            version: 1,
+            defaults: () => ({ records: [] as UploadRecord[] }),
+        });
         const uploader = new TrackUploader({
+            persist: {
+                load: () => queue.get().records,
+                save: (records) => {
+                    const kept = records.slice(-TRACK_PERSIST_MAX);
+                    while (kept.length > 0 && utf8Bytes(JSON.stringify(kept)) > TRACK_PERSIST_MAX_BYTES) kept.shift();
+                    if (kept.length === 0) queue.reset();
+                    else queue.set({ records: kept });
+                    deviceSave.flush();
+                },
+            },
             send: (records) =>
                 http.post(path, { events: records }, { retries: 0, skipRefresh: true }).then(() => undefined),
             isPermanent: isPermanentUploadError,
@@ -197,6 +215,7 @@ function setupCore(env: IConfigEnvironment) {
         errorReporter.addSink(errors.push);
         lifecycle.onHide(() => {
             errors.flush();
+            uploader.persist();
             void uploader.flushAll();
         });
     }

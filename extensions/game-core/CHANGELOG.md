@@ -21,6 +21,9 @@
 - `coreUi.confirm` 默认确认框的节点被外部移除或销毁时返回 `false`
 - 升级脚本：替换 game-core 或锁定文件失败时恢复原插件与锁定文件，不留下 `game-core.next`；恢复也失败时提示原插件所在目录
 - 上传检查读取带 md5 后缀的 `src/settings.<hash>.json`；缺少、多个或无法解析时拒绝上传
+- 待确认订单：带 `orderId` 的 `pending` 结果保存在 `userSave`（slot `pay_orders`），迟到结果为成功或失败时移除；`payment.recoverOrders()` 逐个 `queryOrder`，查到成功或失败的订单移除并经 `onLateResult` 回调（同一订单只回调一次），超过 7 天的订单直接移除，由业务在设置支付实现与 `onLateResult` 后、联网登录就绪时调用；`IPayment.queryOrder` 返回 `failed` 表示订单已关闭，查询失败时应 reject 或返回 `pending`；新增 `payment.setOrderStore`、`payment.pendingOrders()`、`ORDER_MAX_AGE_MS`，类型 `OrderStore`、`PendingOrder`；`PaymentService` 构造参数新增 `now`
+- 埋点：配置 `trackPath` 时切后台把未上报的记录（最新的 `TRACK_PERSIST_MAX` 200 条且不超过 `TRACK_PERSIST_MAX_BYTES` 100 KB）保存到 `deviceSave`（slot `track_queue`），下次启动先补发 3 天内的记录；保存后每批发送成功或丢弃时同步更新，队列清空时删除；`TrackUploaderOptions` 新增 `persist`、`maxAgeMs`、`now`
+- 升级脚本读取 `.env.local`，`GAME_CORE_SOURCE` 可写在其中
 
 ## 2.2.0（2026-10-29）
 

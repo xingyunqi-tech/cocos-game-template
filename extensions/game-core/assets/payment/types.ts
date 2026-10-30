@@ -20,6 +20,18 @@ export interface PayResult {
     errCode?: number;
 }
 
+export interface PendingOrder {
+    orderId: string;
+    item: PayItem;
+    time: number;
+}
+
+/** 保存 pending 订单，补单时读取；读写都针对当前用户 */
+export interface OrderStore {
+    load(): PendingOrder[];
+    save(orders: PendingOrder[]): void;
+}
+
 export interface PayHooks {
     /** 服务端订单创建后调用，超时返回的 pending 结果带上该订单号 */
     onOrder(orderId: string): void;
@@ -29,6 +41,6 @@ export interface PayHooks {
 export interface IPayment {
     readonly supported: boolean;
     pay(item: PayItem, hooks?: PayHooks): Promise<PayResult>;
-    /** 查询订单状态，用于 pending 订单与登录后补单 */
+    /** 查询订单状态，用于 pending 订单与登录后补单；failed 表示订单已关闭，查询本身失败时 reject 或返回 pending */
     queryOrder?(orderId: string): Promise<PayResult>;
 }

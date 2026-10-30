@@ -176,8 +176,8 @@ export {
 export type { ButtonOptions, LabelOptions, LayerName, Modal } from './ui/kit';
 export { SafeTopAdapter } from './ui/SafeTopAdapter';
 export { Settings } from './ui/Settings';
-export { PaymentService, unsupportedPayment } from './payment/Payment';
+export { ORDER_MAX_AGE_MS, PaymentService, unsupportedPayment } from './payment/Payment';
 export type { LatePayListener } from './payment/Payment';
-export type { IPayment, PayFailReason, PayHooks, PayItem, PayResult } from './payment/types';
+export type { IPayment, OrderStore, PayFailReason, PayHooks, PayItem, PayResult, PendingOrder } from './payment/types';
 export { ServerTime } from './time/ServerTime';
 export type { ServerTimeOptions } from './time/ServerTime';

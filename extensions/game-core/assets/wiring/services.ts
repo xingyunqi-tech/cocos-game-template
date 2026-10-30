@@ -14,6 +14,7 @@ import { HttpClient } from '../net/HttpClient';
 import { MockTransport } from '../net/MockTransport';
 import { XhrTransport } from '../net/XhrTransport';
 import { PaymentService } from '../payment/Payment';
+import type { PendingOrder } from '../payment/types';
 import { AppUpdate } from '../platform/AppUpdate';
 import { createPlatform } from '../platform/createPlatform';
 import { NetworkStatus } from '../platform/NetworkStatus';
@@ -64,6 +65,19 @@ payment.onLateResult((item, result) =>
 );
 export const deviceSave = new SaveStore({ store: localStore, prefix: 'gc:d', onWarn: saveWarn });
 export const userSave = new SaveStore({ store: localStore, prefix: 'gc:u', requireScope: true, onWarn: saveWarn });
+const orderSlot = userSave.slot('pay_orders', { version: 1, defaults: () => ({ orders: [] as PendingOrder[] }) });
+payment.setOrderStore({
+    load: () => (userSave.hasScope ? orderSlot.get().orders : []),
+    save: (orders) => {
+        if (!userSave.hasScope) {
+            log.warn('未登录，待确认订单未保存', { orders: orders.map((order) => order.orderId) });
+            return;
+        }
+        if (orders.length === 0) orderSlot.reset();
+        else orderSlot.set({ orders });
+        userSave.flush();
+    },
+});
 export const remoteConfig = new RemoteConfig<RemoteSettingsMap>(
     { reviewMode: false, shareReward: false },
     (key, value) => log.warn('远程配置类型与默认值不一致，已忽略', { key, value }),

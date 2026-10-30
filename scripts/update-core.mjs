@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { diff, snapshot } from './check-plugins.mjs';
-import { ROOT } from './lib/cocos.mjs';
+import { loadLocalEnv, ROOT } from './lib/cocos.mjs';
 
 const CORE_DIR = join('extensions', 'game-core');
 const LOCK_FILE = join('scripts', 'plugin-locks', 'game-core.json');
@@ -88,6 +88,7 @@ function readVersion(dir) {
 }
 
 function main() {
+    loadLocalEnv();
     const { positionals, values } = parseArgs({
         allowPositionals: true,
         options: {

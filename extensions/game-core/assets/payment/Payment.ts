@@ -1,4 +1,4 @@
-import type { IPayment, PayItem, PayResult } from './types';
+import type { IPayment, OrderStore, PayItem, PayResult, PendingOrder } from './types';
 
 export const unsupportedPayment: IPayment = {
     supported: false,
@@ -7,6 +7,19 @@ export const unsupportedPayment: IPayment = {
 
 /** 包装平台支付：同一时间只允许一笔，调试时可模拟结果 */
 export const PAY_TIMEOUT_MS = 120000;
+export const ORDER_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
+
+function isPendingOrder(value: unknown): value is PendingOrder {
+    const order = value as Partial<PendingOrder> | null;
+    return (
+        typeof order === 'object' &&
+        order !== null &&
+        typeof order.orderId === 'string' &&
+        typeof order.time === 'number' &&
+        typeof order.item === 'object' &&
+        order.item !== null
+    );
+}
 
 export type LatePayListener = (item: PayItem, result: PayResult) => void;
 
@@ -14,22 +27,34 @@ export class PaymentService {
     private impl: IPayment = unsupportedPayment;
     private paying = false;
     private readonly lateListeners: LatePayListener[] = [];
+    private orders: OrderStore | null = null;
+    private recovering: Promise<void> | null = null;
     simulate: PayResult['result'] | null = null;
 
     constructor(
         private readonly onResult?: (item: PayItem, result: PayResult) => void,
         private readonly timeoutMs = PAY_TIMEOUT_MS,
+        private readonly now: () => number = Date.now,
     ) {}
 
     setImplementation(impl: IPayment) {
         this.impl = impl;
     }
 
+    /** 带订单号的 pending 结果写入 store，等迟到结果或 recoverOrders 查询到最终结果后移除 */
+    setOrderStore(store: OrderStore) {
+        this.orders = store;
+    }
+
+    pendingOrders(): PendingOrder[] {
+        return this.loadOrders();
+    }
+
     get supported(): boolean {
         return this.simulate !== null || this.impl.supported;
     }
 
-    /** 超时返回 pending 之后平台给出的结果；实现报告过订单号时结果带上该订单号 */
+    /** 超时返回 pending 之后平台给出的结果，以及 recoverOrders 查询到的最终结果；实现报告过订单号时结果带上该订单号 */
     onLateResult(listener: LatePayListener): () => void {
         this.lateListeners.push(listener);
         return () => {
@@ -74,9 +99,12 @@ export class PaymentService {
             clearTimeout(timer);
             this.paying = false;
             if (timedOut) {
-                void paid.then((late) =>
-                    this.emitLate(item, late.orderId || !orderId ? { ...late } : { ...late, orderId }),
-                );
+                void paid.then((late) => {
+                    const result = late.orderId || !orderId ? { ...late } : { ...late, orderId };
+                    if (result.orderId && result.result !== 'pending') this.forgetOrder(result.orderId);
+                    else if (result.orderId) this.rememberOrder(item, result.orderId);
+                    this.emitLate(item, result);
+                });
             }
         }
     }
@@ -84,6 +112,64 @@ export class PaymentService {
     queryOrder(orderId: string): Promise<PayResult> {
         if (!this.impl.queryOrder) return Promise.resolve({ result: 'failed', reason: 'unsupported', orderId });
         return this.impl.queryOrder(orderId).catch(() => ({ result: 'pending' as const, orderId }));
+    }
+
+    /** 查询 store 中的 pending 订单，得到成功或失败时移除并通过 onLateResult 回调；超过 maxAgeMs 的订单直接移除。在 setImplementation 与 onLateResult 之后调用 */
+    recoverOrders(maxAgeMs = ORDER_MAX_AGE_MS): Promise<void> {
+        this.recovering ??= this.recover(maxAgeMs).finally(() => {
+            this.recovering = null;
+        });
+        return this.recovering;
+    }
+
+    private async recover(maxAgeMs: number) {
+        if (!this.orders || !this.impl.queryOrder) return;
+        const now = this.now();
+        for (const order of this.loadOrders()) {
+            if (now - order.time > maxAgeMs) {
+                this.forgetOrder(order.orderId);
+                continue;
+            }
+            const result = await this.queryOrder(order.orderId);
+            if (result.result === 'pending' || !this.forgetOrder(order.orderId)) continue;
+            this.emitLate(order.item, result.orderId ? result : { ...result, orderId: order.orderId });
+        }
+    }
+
+    private loadOrders(): PendingOrder[] {
+        if (!this.orders) return [];
+        try {
+            const orders = this.orders.load();
+            return Array.isArray(orders) ? orders.filter(isPendingOrder) : [];
+        } catch (err) {
+            console.error('[game-core] 读取待确认订单失败', err);
+            return [];
+        }
+    }
+
+    private saveOrders(orders: PendingOrder[]) {
+        try {
+            this.orders?.save(orders);
+        } catch (err) {
+            console.error('[game-core] 保存待确认订单失败', err);
+        }
+    }
+
+    private rememberOrder(item: PayItem, orderId: string) {
+        if (!this.orders) return;
+        const orders = this.loadOrders();
+        if (orders.some((order) => order.orderId === orderId)) return;
+        orders.push({ orderId, item: { ...item }, time: this.now() });
+        this.saveOrders(orders);
+    }
+
+    /** 返回订单是否在 store 中 */
+    private forgetOrder(orderId: string): boolean {
+        const orders = this.loadOrders();
+        const rest = orders.filter((order) => order.orderId !== orderId);
+        if (rest.length === orders.length) return false;
+        this.saveOrders(rest);
+        return true;
     }
 
     private emitLate(item: PayItem, result: PayResult) {
@@ -97,6 +183,7 @@ export class PaymentService {
     }
 
     private emit(item: PayItem, result: PayResult): PayResult {
+        if (result.result === 'pending' && result.orderId) this.rememberOrder(item, result.orderId);
         try {
             this.onResult?.(item, result);
         } catch (err) {

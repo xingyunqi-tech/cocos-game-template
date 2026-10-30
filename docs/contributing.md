@@ -16,6 +16,10 @@ npm run build -- web --debug && npm run smoke:web
 
 改动涉及构建配置、资源或场景时，再执行 `npm run build` 确认三端构建通过。
 
+## 依赖
+
+`npm audit` 报告的漏洞来自 miniprogram-ci、tt-ide-cli、exceljs 的传递依赖，上游没有修复版本。这些包只在构建、上传、导表时于本机或 CI 运行，不进入游戏包。升级依赖后执行 `npm audit fix`，不加 `--force`。
+
 ## 评审
 
 - 每个任务合并前做一次代码评审（同事或 AI 评审）

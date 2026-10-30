@@ -103,7 +103,17 @@ bootPipeline.register(
 
 ## 7. 内购接口
 
-`payment.pay({ productId, price })` 返回 `{ result: 'success' | 'failed' | 'pending', orderId?, reason? }`，`reason` 为 `unsupported`、`not_logged_in`、`cancelled`、`order_failed`、`pay_failed`、`busy`、`timeout`。平台 120 秒未回调时返回 `pending`（`reason: 'timeout'`），实现在服务端创建订单后调用 `pay(item, hooks)` 的 `hooks.onOrder(orderId)` 时，该结果带上 `orderId`；之后平台给出的结果通过 `payment.onLateResult((item, result) => …)` 回调（埋点 `pay_late_result`）。超时后即可发起下一笔支付，界面应提示用户支付结果待确认，避免重复购买。`pending` 订单与登录后补单用 `payment.queryOrder(orderId)` 查询（实现 `IPayment.queryOrder`）。微信虚拟支付所需的 `signData`、`paySig`、`signature` 由服务端生成，经 `PayItem.extra` 传入实现。模板只定义接口，三端默认返回 `unsupported`；GM 面板可模拟成功或失败。
+`payment.pay({ productId, price })` 返回 `{ result: 'success' | 'failed' | 'pending', orderId?, reason? }`，`reason` 为 `unsupported`、`not_logged_in`、`cancelled`、`order_failed`、`pay_failed`、`busy`、`timeout`。平台 120 秒未回调时返回 `pending`（`reason: 'timeout'`），实现在服务端创建订单后调用 `pay(item, hooks)` 的 `hooks.onOrder(orderId)` 时，该结果带上 `orderId`；之后平台给出的结果通过 `payment.onLateResult((item, result) => …)` 回调（埋点 `pay_late_result`）。超时后即可发起下一笔支付，界面应提示用户支付结果待确认，避免重复购买。带 `orderId` 的 `pending` 订单保存在当前用户的存档中，迟到结果为成功或失败时移除。`payment.recoverOrders()` 对保存的订单逐个 `queryOrder`（实现 `IPayment.queryOrder`，`failed` 表示订单已关闭，查询失败时 reject 或返回 `pending`），查到成功或失败时移除并经 `onLateResult` 回调，仍为 `pending` 的保留，超过 7 天的移除。业务在设置支付实现与 `onLateResult` 之后补单：
+
+```ts
+payment.setImplementation(myPayment);
+payment.onLateResult((item, result) => result.result === 'success' && refreshWallet());
+onUserReady(({ offline }) => {
+    if (!offline) void payment.recoverOrders();
+});
+```
+
+`payment.pendingOrders()` 返回当前保存的订单，`payment.queryOrder(orderId)` 可单独查询。发货以服务端为准，`onLateResult` 收到成功时刷新余额或背包即可。微信虚拟支付所需的 `signData`、`paySig`、`signature` 由服务端生成，经 `PayItem.extra` 传入实现。模板只定义接口，三端默认返回 `unsupported`；GM 面板可模拟成功或失败。
 
 接入真实支付时实现 `IPayment` 并 `payment.setImplementation(impl)`。约定：客户端请求服务端创建订单 → 服务端返回平台支付参数 → 客户端调起平台支付（微信 iOS `wx.requestVirtualPayment`，抖音 Android `tt.requestGamePayment`，iOS 钻石兑换，实施前按平台最新规则核实）→ 平台回调服务端 → 服务端发货；客户端只以服务端订单状态为准，不在客户端发货。
 
@@ -200,7 +210,7 @@ wallet.onChange((key, amount) => refreshLabel(key, amount));
 ## 14. 监控
 
 - `track(event, params)` 埋点，`reportError(err, source)` 错误上报；公共参数含版本、平台、envVersion。配置 `trackPath` 时错误上报经过限流：来源、信息与上下文相同的错误 60 秒内只上报一次，每分钟最多 30 条，合并次数 `repeated` 与丢弃数 `dropped` 随下一次上报或切后台时补报；日志输出不限流
-- `config.json` 的 `trackPath` 非空时批量上报到该接口（20 条或 10 秒一批，切后台立即发送），错误以 `error` 事件上报；上报请求携带登录 token，401 时不刷新 token，与网络错误、5xx 一样指数退避重试，退避期间不提前发送；其他 4xx 以及 2xx 但响应解析失败或业务校验失败时丢弃该批
+- `config.json` 的 `trackPath` 非空时批量上报到该接口（20 条或 10 秒一批，切后台立即发送）；切后台时未上报的记录（最新的 200 条且不超过 100 KB）保存在本地，下次启动先补发 3 天内的记录，服务端收到请求但响应丢失时可能重复，可按 `time` 与事件去重，错误以 `error` 事件上报；上报请求携带登录 token，401 时不刷新 token，与网络错误、5xx 一样指数退避重试，退避期间不提前发送；其他 4xx 以及 2xx 但响应解析失败或业务校验失败时丢弃该批
 - `remoteConfigPath` 非空时启动拉取远程配置，失败使用上次缓存，再失败使用默认值；远程值按默认值深合并，类型与默认值不一致的项忽略并输出警告（如布尔项下发字符串 `"false"`）
 - 业务配置项扩展 `RemoteSettingsMap` 并在模块顶层提供默认值，`remoteConfig.get` 类型自动推导；未提供默认值且远程未下发的项读到 `undefined`：
 

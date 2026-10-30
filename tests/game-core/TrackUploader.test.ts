@@ -19,6 +19,67 @@ function manualTimer() {
     };
 }
 
+function memoryPersist(initial: UploadRecord[] = []) {
+    let saved = initial;
+    return { load: () => saved, save: vi.fn((records: UploadRecord[]) => (saved = records)), saved: () => saved };
+}
+
+describe('TrackUploader persistence', () => {
+    it('restores saved records that are not expired and sends them first', async () => {
+        const timer = manualTimer();
+        const persist = memoryPersist([
+            { event: 'old', params: {}, time: 0 },
+            { event: 'kept', params: {}, time: 900 },
+            { event: 'bad' } as UploadRecord,
+        ]);
+        const send = vi.fn(() => Promise.resolve());
+        const uploader = new TrackUploader({ send, persist, maxAgeMs: 500, now: () => 1000, ...timer });
+        expect(uploader.pending).toBe(1);
+        expect(timer.armed()).toBe(true);
+        uploader.push(record('new'));
+        await uploader.flush();
+        expect(send).toHaveBeenCalledWith([{ event: 'kept', params: {}, time: 900 }, record('new')]);
+        expect(persist.saved()).toEqual([]);
+    });
+
+    it('saves in-flight and queued records and keeps them in sync until the queue drains', async () => {
+        let finish: () => void = () => undefined;
+        const send = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
+        const persist = memoryPersist();
+        const uploader = new TrackUploader({ send, persist, batchSize: 1, ...manualTimer() });
+        uploader.push(record('a'));
+        uploader.push(record('b'));
+        uploader.persist();
+        expect(persist.saved()).toEqual([record('a'), record('b')]);
+        finish();
+        await vi.waitFor(() => expect(persist.saved()).toEqual([record('b')]));
+        void uploader.flush();
+        finish();
+        await vi.waitFor(() => expect(persist.saved()).toEqual([]));
+        persist.save.mockClear();
+        uploader.push(record('c'));
+        void uploader.flush();
+        finish();
+        await uploader.flush();
+        expect(persist.save).not.toHaveBeenCalled();
+    });
+
+    it('keeps failed batches in the saved records without rewriting them', async () => {
+        const persist = memoryPersist();
+        const uploader = new TrackUploader({
+            send: () => Promise.reject(new Error('offline')),
+            persist,
+            ...manualTimer(),
+        });
+        uploader.push(record('a'));
+        uploader.persist();
+        persist.save.mockClear();
+        await uploader.flush();
+        expect(persist.saved()).toEqual([record('a')]);
+        expect(persist.save).not.toHaveBeenCalled();
+    });
+});
+
 describe('TrackUploader', () => {
     it('sends a batch when the buffer reaches the batch size', async () => {
         const send = vi.fn(() => Promise.resolve());
