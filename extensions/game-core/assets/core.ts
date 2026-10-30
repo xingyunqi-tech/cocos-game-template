@@ -11,7 +11,7 @@ import { createLogger, logHub } from './monitor/logger';
 import { track, tracker } from './monitor/track';
 import { isPermanentUploadError, TrackUploader, type UploadRecord } from './monitor/TrackUploader';
 import { HttpClient } from './net/HttpClient';
-import type { HttpTransport } from './net/types';
+import { HttpError, type HttpTransport } from './net/types';
 import { XhrTransport } from './net/XhrTransport';
 import type { IPlatform } from './platform/types';
 import type { KeyValueStore } from './save/KeyValueStore';
@@ -202,7 +202,7 @@ function setupCore(env: IConfigEnvironment) {
             },
             send: (records) =>
                 http.post(path, { events: records }, { retries: 0, skipRefresh: true }).then(() => undefined),
-            isPermanent: isPermanentUploadError,
+            isPermanent: (err) => !(err instanceof HttpError && http.isAuthError(err)) && isPermanentUploadError(err),
         });
         tracker.addSink((event) => uploader.push(event));
         const errors = new ErrorThrottle((report) =>

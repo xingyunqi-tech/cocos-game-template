@@ -14,7 +14,7 @@ export type ResponseInterceptor = (response: HttpResponse) => HttpResponse | Pro
 
 export interface TokenProvider {
     getToken(): string | null;
-    /** reason 为 expiring 表示 token 即将过期时的主动刷新，expired 表示请求返回 401 */
+    /** reason 为 expiring 表示 token 即将过期时的主动刷新，expired 表示请求失败且 isAuthError 判定 token 失效 */
     refresh(reason?: 'expiring' | 'expired'): Promise<string | null>;
     /** 返回 true 时先刷新 token 再发送请求（token 即将过期） */
     shouldRefresh?(): boolean;
@@ -39,8 +39,12 @@ export interface HttpClientOptions {
     tokenProvider?: TokenProvider;
     authHeader?: (token: string) => [string, string];
     businessCheck?: (data: unknown) => BusinessResult;
+    /** 判断请求失败是否表示 token 失效并触发刷新，默认 HTTP 401；业务码表示失效时可加入 kind 为 business 的判断 */
+    isAuthError?: (error: HttpError) => boolean;
     sleep?: (ms: number) => Promise<void>;
 }
+
+const isUnauthorized = (error: HttpError) => error.status === 401;
 
 const IDEMPOTENT: ReadonlySet<HttpMethod> = new Set(['GET', 'PUT', 'DELETE']);
 
@@ -155,6 +159,16 @@ export class HttpClient {
         Object.assign(this.options, options);
     }
 
+    /** 按 isAuthError 判断是否表示 token 失效；判断函数抛错时为 false */
+    isAuthError(error: HttpError): boolean {
+        try {
+            return (this.options.isAuthError ?? isUnauthorized)(error);
+        } catch (err) {
+            console.error('[game-core] isAuthError 抛错', err);
+            return false;
+        }
+    }
+
     useRequest(interceptor: RequestInterceptor): () => void {
         this.requestInterceptors.push(interceptor);
         return () => this.remove(this.requestInterceptors, interceptor);
@@ -227,7 +241,7 @@ export class HttpClient {
         try {
             return await this.send(request, used);
         } catch (err) {
-            if (!(err instanceof HttpError) || err.status !== 401 || request.skipRefresh) throw err;
+            if (!(err instanceof HttpError) || request.skipRefresh || !this.isAuthError(err)) throw err;
             const current = provider.getToken();
             if (current && current !== used) return this.send(request, current);
             if (refreshed === null) throw err;
@@ -237,7 +251,7 @@ export class HttpClient {
         }
     }
 
-    /** 进行中的主动刷新失败时，401 引起的刷新在其后按过期刷新 */
+    /** 进行中的主动刷新失败时，token 失效引起的刷新在其后按过期刷新 */
     private refreshToken(provider: TokenProvider, reason: 'expiring' | 'expired'): Promise<string | null> {
         if (this.refreshing && this.refreshingReason === 'expiring' && reason === 'expired') {
             return this.refreshing.then((token) => token ?? this.refreshToken(provider, 'expired'));

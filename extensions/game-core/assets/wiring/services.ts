@@ -48,7 +48,7 @@ export const mockTransport = new MockTransport();
 export const http = new HttpClient({ transport: xhrTransport });
 export const serverTime = new ServerTime({ monotonic: () => platform.monotonicNow() });
 http.useResponse((response) => {
-    if (!serverTime.synced && !response.headers.age) serverTime.syncFromDateHeader(response.headers.date);
+    if (!response.headers.age) serverTime.syncFromDateHeader(response.headers.date);
     return response;
 });
 export const payment = new PaymentService((item, result) =>

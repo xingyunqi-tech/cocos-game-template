@@ -112,6 +112,50 @@ describe('HttpClient', () => {
         expect(refresh).toHaveBeenCalledTimes(1);
     });
 
+    it('refreshes on business errors that isAuthError treats as an expired token', async () => {
+        let token = 'old';
+        const refresh = vi.fn(() => Promise.resolve((token = 'new')));
+        const mock = new MockTransport().on('GET', '/me', (req) => ({
+            body: req.headers.Authorization === 'Bearer new' ? { code: 0, data: { id: 1 } } : { code: 40101 },
+        }));
+        const http = client(mock, {
+            tokenProvider: { getToken: () => token, refresh },
+            businessCheck: (data) => {
+                const body = data as { code: number; data?: unknown };
+                return { ok: body.code === 0, code: body.code, data: body.data };
+            },
+            isAuthError: (error) => error.status === 401 || error.code === 40101,
+        });
+        await expect(http.get('me')).resolves.toMatchObject({ data: { id: 1 } });
+        expect(refresh).toHaveBeenCalledOnce();
+    });
+
+    it('keeps the original error when isAuthError throws', async () => {
+        const refresh = vi.fn(() => Promise.resolve('new'));
+        const mock = new MockTransport().on('GET', '/me', () => ({ status: 401 }));
+        const http = client(mock, {
+            tokenProvider: { getToken: () => 'old', refresh },
+            isAuthError: () => {
+                throw new Error('bad check');
+            },
+        });
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        await expect(http.get('me')).rejects.toMatchObject({ kind: 'http', status: 401 });
+        expect(refresh).not.toHaveBeenCalled();
+        spy.mockRestore();
+    });
+
+    it('does not refresh on business errors by default', async () => {
+        const refresh = vi.fn(() => Promise.resolve('new'));
+        const mock = new MockTransport().on('GET', '/me', () => ({ body: { code: 40101 } }));
+        const http = client(mock, {
+            tokenProvider: { getToken: () => 'old', refresh },
+            businessCheck: (data) => ({ ok: false, code: (data as { code: number }).code }),
+        });
+        await expect(http.get('me')).rejects.toMatchObject({ kind: 'business', code: 40101 });
+        expect(refresh).not.toHaveBeenCalled();
+    });
+
     it('surfaces the 401 when the refresh yields no token', async () => {
         const provider: TokenProvider = { getToken: () => 'x', refresh: () => Promise.resolve(null) };
         const mock = new MockTransport().on('GET', '/me', () => ({ status: 401 }));

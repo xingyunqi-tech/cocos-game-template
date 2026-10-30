@@ -12,9 +12,10 @@ extensions/oops-plugin-framework/  oops 框架，禁止修改
 - 业务层不直接访问 `wx`、`tt`、`window`、`globalThis`，平台能力通过 `platform` 使用（ESLint 检查）
 - 业务层只引用 `db://game-core`（类型扩展用 `declare module 'db://game-core/augment'`），ESLint 禁止引用 game-core 的其他路径
 - 修改 game-core 前先确认能否通过扩展点实现，必须修改时向模板仓库提交，避免下游各自改插件：
-  - `configureCore({ platform, store, transport })`：在模块顶层调用，替换平台实现、存档存储后端、HTTP 传输层
+  - `configureCore({ platform, store, transport })`：在模块顶层调用，替换平台实现、存档存储后端、HTTP 传输层；自定义平台的 `name` 可以是内置名称之外的字符串
   - `auth.configure({ buildLoginBody, parseLoginResponse, buildRefreshBody, parseRefreshResponse })`：后端登录、刷新协议与默认不同时适配
   - `http.onError(listener)`：监听请求最终失败，可注册多个
+  - `http.configure({ businessCheck, isAuthError })`：后端用业务码表示 token 失效时，`isAuthError` 返回 true 触发刷新，例如 `(e) => e.status === 401 || (e.kind === 'business' && e.code === 40101)`（业务码按后端约定）
   - `coreUi.setConfirm`、`coreUi.setSettings`、`coreUi.setDocument`：替换确认框、设置面板、协议页
   - `coreText`：模板界面文案（加载、启动失败、健康忠告、设置面板等）；`LEGAL_DOCUMENTS`：协议页标题与路径；`THEME`：模板界面样式；`coreOptions`：其他模板行为
 
@@ -119,7 +120,7 @@ onUserReady(({ offline }) => {
 
 ## 8. 服务器时间
 
-`serverTime.now()`、`serverTime.today()`（默认东八区自然日）以服务器时间为准：登录响应的 `serverTime`（毫秒）与 HTTP 响应头 `Date` 自动校准。单调时钟由平台提供（Web 用 `performance.now`，小游戏用 `wx.getPerformance` / `tt.getPerformance`，启动时自动判定毫秒或微秒），校准后按单调时钟推算，修改系统时间不影响，`serverTime.calibrated` 为 true。登录未返回 `serverTime` 时以第一个带 `Date` 头且无 `Age` 头的响应校准（秒级精度，不扣除往返耗时）；都没有（如离线进入）时使用本机时间；平台不提供单调时钟时按服务器偏移修正本机时间，两种情况 `calibrated` 都为 false，修改系统时间可以影响结果，奖励价值高时可在 `calibrated` 为 false 时不发放。按天发放的奖励（如 `sidebarReward`）使用 `serverTime.today()`。Web 跨域请求读取 `Date` 头需要服务端设置 `Access-Control-Expose-Headers: Date`。
+`serverTime.now()`、`serverTime.today()`（默认东八区自然日）以服务器时间为准：登录响应的 `serverTime`（毫秒）与 HTTP 响应头 `Date` 自动校准。单调时钟由平台提供（Web 用 `performance.now`，小游戏用 `wx.getPerformance` / `tt.getPerformance`，启动时自动判定毫秒或微秒），校准后按单调时钟推算，修改系统时间不影响，`serverTime.calibrated` 为 true。登录未返回 `serverTime` 时以第一个带 `Date` 头且无 `Age` 头的响应校准（秒级精度，不扣除往返耗时）；之后每个这样的响应用于核对，推算时间落后 `Date` 头超过 2 秒（`DATE_RESYNC_TOLERANCE_MS`，如休眠期间单调时钟暂停）时向前校准，不会向后调整；都没有（如离线进入）时使用本机时间；平台不提供单调时钟时按服务器偏移修正本机时间，两种情况 `calibrated` 都为 false，修改系统时间可以影响结果，奖励价值高时可在 `calibrated` 为 false 时不发放。按天发放的奖励（如 `sidebarReward`）使用 `serverTime.today()`。Web 跨域请求读取 `Date` 头需要服务端设置 `Access-Control-Expose-Headers: Date`。
 
 ## 8.1 每日计数、签到与钱包
 

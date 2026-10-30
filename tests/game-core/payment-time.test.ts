@@ -431,6 +431,19 @@ describe('ServerTime', () => {
         expect(time.now()).toBe(51000);
     });
 
+    it('moves forward on a Date header ahead by more than the tolerance but never backwards', () => {
+        const { c, time } = clocks();
+        const server = Date.UTC(2026, 9, 15, 4, 0);
+        time.sync(server);
+        time.syncFromDateHeader(new Date(server - 60_000).toUTCString());
+        expect(time.now()).toBe(server);
+        time.syncFromDateHeader(new Date(server + 2000).toUTCString());
+        expect(time.now()).toBe(server);
+        c.mono += 1000;
+        time.syncFromDateHeader(new Date(server + 3_600_000).toUTCString());
+        expect(time.now()).toBe(server + 3_600_000);
+    });
+
     it('ignores changes to the local wall clock after calibration', () => {
         const { c, time } = clocks();
         time.sync(Date.UTC(2026, 9, 15, 4, 0));

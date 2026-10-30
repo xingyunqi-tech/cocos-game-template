@@ -1,6 +1,7 @@
 import type { ErrorReporter } from '../monitor/errors';
 
-export type PlatformName = 'web' | 'wechat' | 'douyin';
+/** 内置平台之外的名称用于 configureCore({ platform }) 注入的自定义平台 */
+export type PlatformName = 'web' | 'wechat' | 'douyin' | (string & {});
 
 export type EnvVersion = 'develop' | 'trial' | 'release';
 

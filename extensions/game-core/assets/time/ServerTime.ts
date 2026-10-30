@@ -7,6 +7,9 @@ export interface ServerTimeOptions {
     timezoneOffsetMinutes?: number;
 }
 
+/** 已同步时推算时间落后 Date 头超过该值才重新校准 */
+export const DATE_RESYNC_TOLERANCE_MS = 2000;
+
 /** 以服务器时间为准的时钟：有单调时钟时校准后不受修改系统时间影响；没有时按服务器偏移修正本机时间，calibrated 为 false */
 export class ServerTime {
     private base = 0;
@@ -35,11 +38,13 @@ export class ServerTime {
         this.steady = steady;
     }
 
-    /** 用 HTTP Date 头校准，精度为秒，补半秒 */
+    /** 用 HTTP Date 头校准，精度为秒；未同步时补半秒校准，已同步时只在落后超过 DATE_RESYNC_TOLERANCE_MS 时向前校准 */
     syncFromDateHeader(value: string | undefined) {
         if (!value) return;
         const ms = Date.parse(value);
-        if (!Number.isNaN(ms)) this.sync(ms + 500);
+        if (Number.isNaN(ms)) return;
+        if (!this.hasBase) this.sync(ms + 500);
+        else if (ms - this.now() > DATE_RESYNC_TOLERANCE_MS) this.sync(ms);
     }
 
     /** 时钟读数，传给 sync 的 requestStartedAt */

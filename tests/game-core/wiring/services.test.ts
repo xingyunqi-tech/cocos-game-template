@@ -127,12 +127,13 @@ describe('platform and store injection', () => {
         const showRewarded = vi.fn(() => Promise.resolve({ result: 'completed' as const }));
         const injected = {
             ...platform,
-            name: 'web' as const,
+            name: 'kuaishou',
             ads: { needsUnitId: false, showRewarded, showInterstitial: vi.fn() },
             monotonicNow: () => 1000,
         };
         usePlatform(injected);
         expect(services.platform).toBe(injected);
+        expect(services.platform.name).toBe('kuaishou');
         await expect(ads.showRewarded('any')).resolves.toEqual({ result: 'completed' });
         expect(showRewarded).toHaveBeenCalledWith('any');
     });

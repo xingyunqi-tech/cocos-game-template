@@ -13,6 +13,9 @@
 - `SoundService`：Bundle 释放后旧的加载失败时不影响之后的加载与缓存；广告暂停期间 `stopMusic` / `releaseBundle` 停止音乐，回到前台或广告结束后不再播放
 - 小游戏广告：展示失败后重新加载也失败（如无填充）时 `reason` 为 `load_failed`
 - `coreText` 新增 `loadingProgress`（`{percent}` 占位）、`confirmTitle`、`confirm`、`cancel`、`sidebarTitle`、`sidebarGo`，加载进度、默认确认框按钮与侧边栏引导弹窗使用这些文案
+- HTTP：`HttpClientOptions.isAuthError(error)` 判断请求失败是否表示 token 失效并触发刷新，默认 `status === 401`，抛错时视为 false；后端用业务码表示失效时配合 `businessCheck` 使用；`http.isAuthError(error)` 供外部按同一规则判断；埋点上报遇到该类错误时与 401 一样保留重试
+- `ServerTime.syncFromDateHeader`：已同步时推算时间落后 Date 头超过 `DATE_RESYNC_TOLERANCE_MS`（2 秒）则向前校准，不向后调整；每个无 `Age` 头的响应都参与核对
+- `PlatformName` 接受内置名称之外的字符串，`configureCore({ platform })` 可注入自定义名称的平台
 - `GameRoot`：`config.json` 的 `type` 没有对应环境配置（或配置不是对象）时输出错误日志并显示 `coreText.initFailed`
 
 ### 构建
