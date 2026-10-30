@@ -1,4 +1,5 @@
 import { Node, UITransform } from 'cc';
+import { coreText } from './strings';
 import { THEME, addButton, addLabel, addPanel, fillRect, openModal, type LayerName } from './kit';
 
 export interface ConfirmOptions {
@@ -31,7 +32,10 @@ export function showConfirm(options: ConfirmOptions): Promise<boolean> {
         });
         const links = options.links ?? [];
         const panel = addPanel(modal.root, WIDTH, 0);
-        const title = addLabel(panel, options.title ?? '提示', { fontSize: THEME.titleSize, width: WIDTH - 60 });
+        const title = addLabel(panel, options.title ?? coreText.confirmTitle, {
+            fontSize: THEME.titleSize,
+            width: WIDTH - 60,
+        });
         const content = addLabel(panel, options.content, { width: WIDTH - 80, wrap: true });
         content.updateRenderData(true);
         const contentHeight = Math.max(content.node.getComponent(UITransform)!.height, 60);
@@ -55,10 +59,10 @@ export function showConfirm(options: ConfirmOptions): Promise<boolean> {
             modal.close();
         };
         const hasCancel = options.cancelText !== null;
-        const confirm = addButton(panel, options.confirmText ?? '确定', () => finish(true));
+        const confirm = addButton(panel, options.confirmText ?? coreText.confirm, () => finish(true));
         confirm.setPosition(hasCancel ? 130 : 0, -height / 2 + 70);
         if (hasCancel) {
-            const cancel = addButton(panel, options.cancelText ?? '取消', () => finish(false), {
+            const cancel = addButton(panel, options.cancelText ?? coreText.cancel, () => finish(false), {
                 color: THEME.secondary,
                 textColor: THEME.secondaryText,
             });

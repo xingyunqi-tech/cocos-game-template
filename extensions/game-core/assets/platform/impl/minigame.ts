@@ -126,7 +126,7 @@ const presenting = new WeakMap<object, () => void>();
 function present<C, R>(
     ad: PresentableAd<C>,
     closed: (res?: C) => R,
-    failed: (err: unknown) => R,
+    failed: (err: unknown, reason: 'load_failed' | 'show_failed') => R,
     afterShown?: () => void,
 ): Promise<R> {
     presenting.get(ad)?.();
@@ -144,9 +144,9 @@ function present<C, R>(
         };
         const onClose = (res?: C) => finish(closed(res));
         const onError = (err: ApiError) => {
-            if (shown) finish(failed(err));
+            if (shown) finish(failed(err, 'show_failed'));
         };
-        const supersede = () => finish(failed(new Error('ad superseded')), true);
+        const supersede = () => finish(failed(new Error('ad superseded'), 'show_failed'), true);
         presenting.set(ad, supersede);
         ad.onClose(onClose);
         ad.onError(onError);
@@ -157,8 +157,8 @@ function present<C, R>(
                       shown = true;
                   });
         show()
-            .catch(() => ad.load().then(show))
-            .catch((err: unknown) => finish(failed(err)));
+            .catch(() => ad.load().then(show, (err: unknown) => finish(failed(err, 'load_failed'))))
+            .catch((err: unknown) => finish(failed(err, 'show_failed')));
     });
 }
 
@@ -193,7 +193,7 @@ export class MiniGameAdProvider implements AdProvider {
         return present<{ isEnded?: boolean }, RewardedResult>(
             ad,
             (res) => ({ result: !res || res.isEnded ? 'completed' : 'skipped' }),
-            (err) => ({ result: 'failed', reason: 'show_failed', errCode: errorCodeOf(err) }),
+            (err, reason) => ({ result: 'failed', reason, errCode: errorCodeOf(err) }),
         );
     }
 
@@ -208,7 +208,7 @@ export class MiniGameAdProvider implements AdProvider {
         return present<never, InterstitialResult>(
             ad,
             () => ({ result: 'shown' }),
-            (err) => ({ result: 'failed', reason: 'show_failed', errCode: errorCodeOf(err) }),
+            (err, reason) => ({ result: 'failed', reason, errCode: errorCodeOf(err) }),
             () => {
                 if (!this.options.recreateInterstitialAfterShow) return;
                 delete this.interstitial[unitId];

@@ -9,10 +9,16 @@
 - 远程配置：接口返回数组或原始值时按拉取失败处理，不覆盖上次缓存；返回 `null` 或空响应视为没有覆盖项
 - `onSidebarLaunch`：回调抛错时上报错误，不影响注册与之后的回调
 - 支付：`queryOrder` 同步抛错或 `ORDER_QUERY_TIMEOUT_MS`（15 秒）未返回时按 `pending` 处理，`recoverOrders` 并行查询各订单，不会中断或一直等待；`PaymentService` 构造参数新增 `queryTimeoutMs`；实现报告过订单号时，未超时返回的结果同样带上该订单号（`pending` 结果因此会保存）
+- `AuthService.login`：登录进行中调用 `logout()` 或再次 `login()` 时，本次登录失败后以 `aborted` 拒绝并经 `onWarn` 报告原错误，不再离线进入
+- `SoundService`：Bundle 释放后旧的加载失败时不影响之后的加载与缓存；广告暂停期间 `stopMusic` / `releaseBundle` 停止音乐，回到前台或广告结束后不再播放
+- 小游戏广告：展示失败后重新加载也失败（如无填充）时 `reason` 为 `load_failed`
+- `coreText` 新增 `loadingProgress`（`{percent}` 占位）、`confirmTitle`、`confirm`、`cancel`、`sidebarTitle`、`sidebarGo`，加载进度、默认确认框按钮与侧边栏引导弹窗使用这些文案
 - `GameRoot`：`config.json` 的 `type` 没有对应环境配置（或配置不是对象）时输出错误日志并显示 `coreText.initFailed`
 
 ### 构建
 
+- `scripts/lib/upload.mjs`：`REMOTE_UPLOAD_COMMAND` 中反斜杠转义按 POSIX shell 规则识别，`{dir}` 的引用方式按实际所在引号确定；`{dir}` 前有反斜杠时报错
+- `scripts/update-core.mjs`：`game-core.old` 与 `game-core` 同时存在时，`game-core` 与锁定快照一致则删除残留的 `game-core.old`，否则中止并保留 `game-core.old`；恢复失败的提示与实际恢复条件一致
 - `scripts/tables.mjs`：表名只改大小写时把原 JSON 与 `.meta` 重命名为新表名后写入，保留资源 UUID，不区分大小写的文件系统上不再删除新生成的 JSON
 
 ## 2.3.0（2026-10-29）

@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { isDevVersion } from '../../scripts/check-plugins.mjs';
-import { changelogBetween, compareVersions, installCore } from '../../scripts/update-core.mjs';
+import { isDevVersion, snapshot } from '../../scripts/check-plugins.mjs';
+import { changelogBetween, compareVersions, installCore, restoreInterrupted } from '../../scripts/update-core.mjs';
 
 const LOG = `# game-core 变更记录
 
@@ -115,6 +115,34 @@ describe('installCore', () => {
         };
         expect(() => installCore(source, root, rename)).toThrow(/EPERM 2.*EPERM 3.*game-core\.old/);
         expect(readdirSync(join(root, 'extensions'))).toEqual(['game-core.old']);
+        rmSync(base, { recursive: true, force: true });
+    });
+
+    function lockCurrent(root) {
+        const files = snapshot(join(root, 'extensions/game-core'));
+        writeFileSync(join(root, 'scripts/plugin-locks/game-core.json'), JSON.stringify({ version: '1.0.0', files }));
+    }
+
+    it('restores an interrupted upgrade only when the plugin directory is gone', () => {
+        const { base, root, read } = fixture();
+        lockCurrent(root);
+        expect(restoreInterrupted(root)).toBeNull();
+        renameSync(join(root, 'extensions/game-core'), join(root, 'extensions/game-core.old'));
+        mkdirSync(join(root, 'extensions/game-core'));
+        expect(restoreInterrupted(root)).toBe('conflict');
+        expect(readdirSync(join(root, 'extensions')).sort()).toEqual(['game-core', 'game-core.old']);
+        rmSync(join(root, 'extensions/game-core'), { recursive: true });
+        expect(restoreInterrupted(root)).toBe('restored');
+        expect(read('extensions/game-core/package.json')).toBe('1.0.0');
+        rmSync(base, { recursive: true, force: true });
+    });
+
+    it('removes a leftover backup when the plugin matches its lock', () => {
+        const { base, root } = fixture();
+        lockCurrent(root);
+        cpSync(join(root, 'extensions/game-core'), join(root, 'extensions/game-core.old'), { recursive: true });
+        expect(restoreInterrupted(root)).toBe('cleaned');
+        expect(readdirSync(join(root, 'extensions'))).toEqual(['game-core']);
         rmSync(base, { recursive: true, force: true });
     });
 });

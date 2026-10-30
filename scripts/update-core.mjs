@@ -69,7 +69,7 @@ export function installCore(source, root = ROOT, rename = renameSync) {
                 if (hadTarget) rename(old, target);
             } catch (restoreErr) {
                 throw new Error(
-                    `替换 game-core 失败（${err.message}），恢复也失败（${restoreErr.message}）：原插件在 ${old}，关闭编辑器后再次运行本脚本会自动恢复`,
+                    `替换 game-core 失败（${err.message}），恢复也失败（${restoreErr.message}）：原插件在 ${old}，关闭编辑器后再次运行本脚本会自动恢复（${target} 仍存在时先删除）`,
                     { cause: restoreErr },
                 );
             }
@@ -80,6 +80,20 @@ export function installCore(source, root = ROOT, rename = renameSync) {
         rmSync(stagedLock, { force: true });
     }
     rmSync(old, { recursive: true, force: true });
+}
+
+/** 处理上次升级留下的 game-core.old：game-core 不存在时恢复（restored）；game-core 与锁定快照一致时删除残留（cleaned）；否则不处理（conflict）；没有时返回 null */
+export function restoreInterrupted(root = ROOT) {
+    const target = join(root, CORE_DIR);
+    const old = `${target}.old`;
+    if (!existsSync(old)) return null;
+    if (!existsSync(target)) {
+        renameSync(old, target);
+        return 'restored';
+    }
+    if (localChanges(root)?.length !== 0) return 'conflict';
+    rmSync(old, { recursive: true, force: true });
+    return 'cleaned';
 }
 
 function readVersion(dir) {
@@ -104,12 +118,15 @@ function main() {
         );
         process.exit(1);
     }
-    const target = join(ROOT, CORE_DIR);
-    const old = `${target}.old`;
-    if (!existsSync(target) && existsSync(old)) {
-        renameSync(old, target);
-        console.log(`! 已从 ${CORE_DIR}.old 恢复上次未完成升级前的 game-core`);
+    const restored = restoreInterrupted();
+    if (restored === 'conflict') {
+        console.error(
+            `✗ ${CORE_DIR}.old 是上次未完成升级前的 game-core，${CORE_DIR} 与锁定快照不一致；关闭编辑器，删除 ${CORE_DIR} 后再次运行本脚本会从 ${CORE_DIR}.old 恢复`,
+        );
+        process.exit(1);
     }
+    if (restored === 'restored') console.log(`! 已从 ${CORE_DIR}.old 恢复上次未完成升级前的 game-core`);
+    if (restored === 'cleaned') console.log(`! 已删除上次升级残留的 ${CORE_DIR}.old`);
     const before = readVersion(ROOT);
     if (before && compareVersions(version, before) < 0 && !values['allow-downgrade']) {
         console.error(`✗ 目标版本 ${version} 低于当前 ${before}，确认降级请加 --allow-downgrade`);

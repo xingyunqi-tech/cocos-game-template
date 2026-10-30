@@ -148,13 +148,20 @@ export class AuthService implements TokenProvider {
         this.loggedOut = false;
         this.epoch++;
         this.relogin = null;
-        const online = this.loginOnline(signal, true, this.epoch);
+        const epoch = this.epoch;
+        const online = this.loginOnline(signal, true, epoch);
         this.startup = online;
         try {
             const session = await online;
             return { userId: session.userId, offline: false };
         } catch (err) {
             if (err instanceof HttpError && err.kind === 'aborted') throw err;
+            if (epoch !== this.epoch) {
+                this.options.onWarn?.('登录状态已变化，忽略本次登录失败', {
+                    error: err instanceof Error ? err.message : String(err),
+                });
+                throw new HttpError('aborted', '登录状态已变化');
+            }
             const userId = this.fallbackUser(err);
             if (!userId) throw err;
             this.current = null;

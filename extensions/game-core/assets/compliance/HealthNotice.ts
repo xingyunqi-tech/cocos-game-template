@@ -55,7 +55,9 @@ export class HealthNotice {
 
     setProgress(ratio: number) {
         if (this.progress?.isValid)
-            this.progress.string = `加载中 ${Math.round(Math.min(1, Math.max(0, ratio)) * 100)}%`;
+            this.progress.string = coreText.loadingProgress
+                .split('{percent}')
+                .join(String(Math.round(Math.min(1, Math.max(0, ratio)) * 100)));
     }
 
     setText(text: string) {

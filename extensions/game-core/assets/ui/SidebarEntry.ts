@@ -1,6 +1,7 @@
 import type { Node } from 'cc';
 import type { ConfirmOptions } from './ConfirmDialog';
 import { addButton, THEME } from './kit';
+import { coreText } from './strings';
 
 export interface SidebarEntryOptions {
     isSupported: () => Promise<boolean>;
@@ -20,10 +21,10 @@ export async function createSidebarEntry(parent: Node, options: SidebarEntryOpti
         () => {
             void options
                 .confirm({
-                    title: '侧边栏复访',
+                    title: coreText.sidebarTitle,
                     content: options.rewardText,
-                    confirmText: '去侧边栏',
-                    cancelText: '取消',
+                    confirmText: coreText.sidebarGo,
+                    cancelText: coreText.cancel,
                 })
                 .then((go) => {
                     if (go) void options.open();

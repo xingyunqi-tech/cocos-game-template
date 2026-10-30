@@ -34,6 +34,7 @@ vi.mock('db://game-core/ui/kit', () => ({
 }));
 
 const { showConfirm } = await import('db://game-core/ui/ConfirmDialog');
+const { coreText } = await import('db://game-core/ui/strings');
 
 describe('showConfirm', () => {
     it('resolves with the clicked button and then closes', async () => {
@@ -43,6 +44,19 @@ describe('showConfirm', () => {
         ui.buttons.find((b) => b.text === 'ok')!.onClick();
         await expect(result).resolves.toBe(true);
         expect(ui.close).toHaveBeenCalled();
+    });
+
+    it('labels default buttons from coreText', () => {
+        ui.buttons.length = 0;
+        const saved = { confirm: coreText.confirm, cancel: coreText.cancel };
+        coreText.confirm = 'OK';
+        coreText.cancel = 'Cancel';
+        try {
+            void showConfirm({ content: 'c' });
+            expect(ui.buttons.map((b) => b.text)).toEqual(['OK', 'Cancel']);
+        } finally {
+            Object.assign(coreText, saved);
+        }
     });
 
     it('resolves false when the dialog node is destroyed elsewhere', async () => {

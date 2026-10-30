@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const audio = vi.hoisted(() => {
     const log: string[] = [];
-    const source = { clip: null as { name: string } | null, playing: false };
+    const source = {
+        clip: null as { name: string } | null,
+        playing: false,
+        stop: () => (source.playing = false),
+    };
     let on = true;
     const music = {
         getSwitch: () => on,

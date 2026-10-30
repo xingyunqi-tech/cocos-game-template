@@ -1,22 +1,47 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const loads: Record<string, (clip: unknown) => void> = {};
+const fails: Record<string, (err: unknown) => void> = {};
 const played: string[] = [];
 const music: { stopped: number; complete?: () => void } = { stopped: 0 };
+const source = { playing: false, sourceStops: 0 };
 
-vi.mock('cc', () => ({ AudioClip: class {} }));
+vi.mock('cc', () => ({ AudioClip: class {}, AudioSource: class {} }));
 vi.mock('db://game-core/config/Bundles', () => ({
     loadAsset: (bundle: string, path: string) =>
-        new Promise((resolve) => {
+        new Promise((resolve, reject) => {
             loads[`${bundle}/${path}`] = resolve;
+            fails[`${bundle}/${path}`] = reject;
         }),
 }));
 vi.mock('db://oops-framework/core/Oops', () => ({
     oops: {
         audio: {
-            music: { getSwitch: () => true, stop: () => void music.stopped++ },
+            music: {
+                getSwitch: () => true,
+                stop: () => {
+                    if (source.playing) music.stopped++;
+                    source.playing = false;
+                },
+                pause: () => {
+                    source.playing = false;
+                },
+                resume: () => {
+                    source.playing = true;
+                },
+                getComponent: () => ({
+                    get playing() {
+                        return source.playing;
+                    },
+                    stop: () => {
+                        source.sourceStops++;
+                        source.playing = false;
+                    },
+                }),
+            },
             playMusic: (clip: { name: string }, params?: { onPlayComplete?: () => void }) => {
                 played.push(clip.name);
+                source.playing = true;
                 music.complete = params?.onPlayComplete;
             },
             playEffect: () => ({}),
@@ -42,6 +67,8 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 beforeEach(() => {
     played.length = 0;
     music.stopped = 0;
+    source.playing = false;
+    source.sourceStops = 0;
 });
 
 describe('SoundService', () => {
@@ -85,6 +112,34 @@ describe('SoundService', () => {
         expect(loads['shop/bgm']).toBeDefined();
         loads['shop/bgm'](clip('bgm'));
         await expect(again).resolves.toBe(true);
+    });
+
+    it('keeps a newer load when an earlier load of a forgotten bundle fails', async () => {
+        const sound = new SoundService();
+        const first = sound.playEffect(ref('hit', 'shop'));
+        const failFirst = fails['shop/hit'];
+        sound.forgetBundle('shop');
+        const second = sound.playEffect(ref('hit', 'shop'));
+        const hit = clip('hit');
+        loads['shop/hit'](hit);
+        failFirst(new Error('load failed'));
+        await expect(first).resolves.toBe(false);
+        await expect(second).resolves.toBe(true);
+        sound.forgetBundle('shop');
+        await flush();
+        expect(hit.refs).toBe(0);
+    });
+
+    it('stops music that is paused for an ad', async () => {
+        const sound = new SoundService();
+        const playing = sound.playMusic(ref('bgm'));
+        loads['b/bgm'](clip('bgm'));
+        await playing;
+        sound.pauseForAd();
+        sound.stopMusic();
+        expect(source.sourceStops).toBe(1);
+        sound.resumeAfterAd();
+        expect(source.playing).toBe(false);
     });
 
     it('forgets music that does not loop once it finishes', async () => {

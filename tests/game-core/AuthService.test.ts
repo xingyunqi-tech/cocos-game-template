@@ -486,6 +486,16 @@ describe('AuthService session recovery', () => {
         expect(s.auth.getToken()).toBe('t2');
     });
 
+    it('does not enter offline when logout happens before a failing login settles', async () => {
+        const s = setup({ lastUser: 'u-old', fallback: 'guest' });
+        s.mock.on('POST', '/auth/login', () => ({ status: 503 }));
+        const login = s.auth.login();
+        s.auth.logout();
+        await expect(login).rejects.toMatchObject({ kind: 'aborted' });
+        expect(s.onUser).not.toHaveBeenCalled();
+        expect(s.auth.offline).toBe(false);
+    });
+
     it('keeps the session cleared when logout happens during a refresh or background login', async () => {
         const s = setup();
         await s.auth.login();

@@ -102,6 +102,13 @@ export function remoteCommand(command, platform = process.platform) {
             continue;
         }
         const ch = command[i];
+        if (!windows && ch === '\\' && quote !== "'" && i + 1 < command.length) {
+            if (command.startsWith('{dir}', i + 1)) throw new Error('REMOTE_UPLOAD_COMMAND 中 {dir} 前不能有反斜杠');
+            if (quote === '' || '$`"\\\n'.includes(command[i + 1])) {
+                out += ch + command[++i];
+                continue;
+            }
+        }
         if (quote === '' && (ch === '"' || (ch === "'" && !windows))) quote = ch;
         else if (ch === quote) quote = '';
         out += ch;

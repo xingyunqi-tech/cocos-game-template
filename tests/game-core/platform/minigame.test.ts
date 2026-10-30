@@ -427,14 +427,14 @@ describe('MiniGameAdProvider', () => {
         await expect(pending).resolves.toEqual({ result: 'completed' });
     });
 
-    it('fails with the error code when reload also fails', async () => {
+    it('fails with load_failed and the error code when reload also fails', async () => {
         const { api } = fakeApi({
             createRewardedVideoAd: () => presetAd({ showResults: [{ errCode: 1004 }], loadResult: { errCode: 1004 } }),
         });
         const result = await new MiniGameAdProvider(asApi(api), { recreateInterstitialAfterShow: false }).showRewarded(
             'u2',
         );
-        expect(result).toEqual({ result: 'failed', reason: 'show_failed', errCode: 1004 });
+        expect(result).toEqual({ result: 'failed', reason: 'load_failed', errCode: 1004 });
         expect(created[0].loadCalls).toBe(1);
         expect(created[0].listeners.close).toHaveLength(0);
     });
@@ -464,7 +464,7 @@ describe('MiniGameAdProvider', () => {
         const provider = new MiniGameAdProvider(asApi(api), { recreateInterstitialAfterShow: true });
         await expect(provider.showInterstitial('i1')).resolves.toEqual({
             result: 'failed',
-            reason: 'show_failed',
+            reason: 'load_failed',
             errCode: 2002,
         });
         expect(created[0].destroyed).toBe(false);

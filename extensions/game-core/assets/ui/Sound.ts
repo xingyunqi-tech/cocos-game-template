@@ -20,19 +20,23 @@ export class SoundService {
     clip(ref: SoundRef): Promise<AudioClip | null> {
         const key = `${ref.bundle}:${ref.path}`;
         if (Date.now() - (this.failedAt[key] ?? -Infinity) < RETRY_AFTER_MS) return Promise.resolve(null);
-        this.clips[key] ??= loadAsset(ref.bundle, ref.path, AudioClip).then(
+        if (key in this.clips) return this.clips[key];
+        const loading: Promise<AudioClip | null> = loadAsset(ref.bundle, ref.path, AudioClip).then(
             (clip) => {
                 clip.addRef();
                 return clip;
             },
             (err: unknown) => {
                 console.warn(`[game-core] 音频加载失败 ${key}`, err);
-                delete this.clips[key];
-                this.failedAt[key] = Date.now();
+                if (this.clips[key] === loading) {
+                    delete this.clips[key];
+                    this.failedAt[key] = Date.now();
+                }
                 return null;
             },
         );
-        return this.clips[key];
+        this.clips[key] = loading;
+        return loading;
     }
 
     /** 记录为当前背景音乐；音乐开关关闭时不播放并返回 false，打开开关后由 resumeMusic 播放；加载期间被新的播放或停止取代时返回 false；不循环的音乐播完后清除当前背景音乐 */
@@ -57,7 +61,10 @@ export class SoundService {
     stopMusic() {
         this.lastMusic = null;
         this.musicRequest++;
-        oops.audio?.music?.stop();
+        this.pausedForAd = null;
+        const music = oops.audio?.music;
+        music?.stop();
+        music?.getComponent(AudioSource)?.stop();
     }
 
     /** 暂停正在播放的背景音乐，供广告展示期间使用 */

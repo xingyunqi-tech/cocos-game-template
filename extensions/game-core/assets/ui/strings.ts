@@ -1,6 +1,8 @@
 /** 模板界面文案，在模块顶层修改；协议页标题见 LEGAL_DOCUMENTS */
 export const coreText = {
     loading: '加载中…',
+    /** {percent} 替换为 0 到 100 的整数 */
+    loadingProgress: '加载中 {percent}%',
     configFailed: '配置加载失败，点击重试',
     bootFailed: '启动失败，点击重试',
     initFailed: '启动失败，请重新打开游戏',
@@ -12,6 +14,11 @@ export const coreText = {
     on: '开',
     off: '关',
     close: '关闭',
+    confirmTitle: '提示',
+    confirm: '确定',
+    cancel: '取消',
+    sidebarTitle: '侧边栏复访',
+    sidebarGo: '去侧边栏',
     back: '返回',
     documentFailed: '内容加载失败，请稍后重试',
     privacyTitle: '隐私保护提示',

@@ -159,6 +159,17 @@ describe('remoteCommand', () => {
         expect(remoteCommand('xcopy "{dir}\\" D:\\cdn', 'win32')).toBe('xcopy "%REMOTE_DIR%\\" D:\\cdn');
     });
 
+    it('treats backslash-escaped quotes as literal characters outside single quotes', () => {
+        expect(remoteCommand('echo a\\"b {dir}', 'linux')).toBe('echo a\\"b "${REMOTE_DIR}"');
+        expect(remoteCommand('echo "a\\"b {dir}"', 'linux')).toBe('echo "a\\"b ${REMOTE_DIR}"');
+        expect(remoteCommand("echo 'a\\' {dir}", 'linux')).toBe('echo \'a\\\' "${REMOTE_DIR}"');
+        expect(remoteCommand('echo "a\\b" {dir}', 'linux')).toBe('echo "a\\b" "${REMOTE_DIR}"');
+    });
+
+    it('rejects a backslash right before {dir}', () => {
+        expect(() => remoteCommand('cp out\\{dir} dest', 'linux')).toThrow('反斜杠');
+    });
+
     it.skipIf(process.platform === 'win32')('passes paths with shell metacharacters unchanged', () => {
         const dir = '/tmp/a b/$HOME/`id`';
         const result = spawnSync(remoteCommand(`printf '%s|%s|%s' {dir} "{dir}/" '{dir}'`), {
