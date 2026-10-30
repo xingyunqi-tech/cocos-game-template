@@ -22,7 +22,7 @@ extensions/oops-plugin-framework/  oops 框架，禁止修改
 
 `GameRoot` 加载 `config.json` → oops 初始化 → `initGameCore()` → 启动流水线（`tables` → `login` → `remote-config` → 业务步骤（示例为 `demo-bundle`））→ 关闭健康忠告加载页 → `setGameEntry` 注册的入口。
 
-业务步骤用 `bootPipeline.register(name, run, { after: 'login' })` 注册；锚点可以是其他模块注册的步骤，执行时解析。必需步骤失败显示“启动失败，点击重试”，点击后只执行未成功的步骤（已成功的步骤与登录不重复执行），`optional: true` 的步骤失败只上报、重试时再次执行。业务入口抛错时同样显示“启动失败，点击重试”，点击后重新调用入口（只重新调用入口，不重跑流水线），入口需可重复执行。
+业务步骤用 `bootPipeline.register(name, run, { after: 'remote-config' })` 注册；`{ after: 'login' }` 排在 `remote-config` 之前，步骤中读到的远程配置为默认值或缓存。锚点可以是其他模块注册的步骤，执行时解析；锚点步骤自身也有锚点时，依附它的步骤跟随它一起排列。必需步骤失败显示“启动失败，点击重试”，点击后只执行未成功的步骤（已成功的步骤与登录不重复执行），`optional: true` 的步骤失败只上报、重试时再次执行。业务入口抛错时同样显示“启动失败，点击重试”，点击后重新调用入口（只重新调用入口，不重跑流水线），入口需可重复执行。
 
 ## 3. 新增业务模块
 
@@ -46,7 +46,7 @@ npm run new:module -- shop
 - slot 的 `version` 递增时提供 `migrations[newVersion]`；缺少迁移步骤或迁移抛错时读到默认值，本次运行的修改不写入，原存档保留，补上迁移后的版本可正常读出；迁移函数只处理对象，需要迁移的数组或原始值用对象包装，否则版本递增时读到默认值，原存档备份到 `<前缀>:__bak:<作用域>:<key>` 后正常写入
 - 本地存档版本高于代码中的 `version`（版本回退、灰度回滚）时读到默认值，本次运行的修改不写入，原存档保留
 - 存档内容无法解析时读到默认值，原文备份到 `<前缀>:__bak:<作用域>:<key>`（每个 key 保留最近一份），之后正常写入
-- 同一个存档对象中 slot key 只能注册一次，重复注册抛错；game-core 已占用 userSave 的 `sidebar`，deviceSave 的 `device`、`auth`、`settings`、`gm`、`remote-config`
+- 同一个存档对象中 slot key 只能注册一次，重复注册抛错；game-core 已占用 userSave 的 `sidebar`、`pay_orders`，deviceSave 的 `device`、`auth`、`settings`、`gm`、`remote-config`、`track_queue`
 - 单个 slot 超过 512KB 会告警，平台单 key 上限 1MB、总量 10MB
 
 ## 4. prefab 界面
@@ -103,7 +103,7 @@ bootPipeline.register(
 
 ## 7. 内购接口
 
-`payment.pay({ productId, price })` 返回 `{ result: 'success' | 'failed' | 'pending', orderId?, reason? }`，`reason` 为 `unsupported`、`not_logged_in`、`cancelled`、`order_failed`、`pay_failed`、`busy`、`timeout`。平台 120 秒未回调时返回 `pending`（`reason: 'timeout'`），实现在服务端创建订单后调用 `pay(item, hooks)` 的 `hooks.onOrder(orderId)` 时，该结果带上 `orderId`；之后平台给出的结果通过 `payment.onLateResult((item, result) => …)` 回调（埋点 `pay_late_result`）。超时后即可发起下一笔支付，界面应提示用户支付结果待确认，避免重复购买。带 `orderId` 的 `pending` 订单保存在当前用户的存档中，迟到结果为成功或失败时移除。`payment.recoverOrders()` 对保存的订单逐个 `queryOrder`（实现 `IPayment.queryOrder`，`failed` 表示订单已关闭，查询失败时 reject 或返回 `pending`），查到成功或失败时移除并经 `onLateResult` 回调，仍为 `pending` 的保留，超过 7 天的移除。业务在设置支付实现与 `onLateResult` 之后补单：
+`payment.pay({ productId, price })` 返回 `{ result: 'success' | 'failed' | 'pending', orderId?, reason? }`，`reason` 为 `unsupported`、`not_logged_in`、`cancelled`、`order_failed`、`pay_failed`、`busy`、`timeout`。平台 120 秒未回调时返回 `pending`（`reason: 'timeout'`），实现在服务端创建订单后调用 `pay(item, hooks)` 的 `hooks.onOrder(orderId)` 时，该结果带上 `orderId`；之后平台给出的结果通过 `payment.onLateResult((item, result) => …)` 回调（埋点 `pay_late_result`）。超时后即可发起下一笔支付，界面应提示用户支付结果待确认，避免重复购买。带 `orderId` 的 `pending` 订单保存在当前用户的存档中，迟到结果为成功或失败时移除。`payment.recoverOrders()` 对保存的订单逐个 `queryOrder`（实现 `IPayment.queryOrder`，`failed` 表示订单已关闭，查询失败时 reject 或返回 `pending`，抛错或 15 秒（`ORDER_QUERY_TIMEOUT_MS`）未返回按 `pending` 处理），查到成功或失败时移除并经 `onLateResult` 回调，仍为 `pending` 的保留，超过 7 天的移除。业务在设置支付实现与 `onLateResult` 之后补单：
 
 ```ts
 payment.setImplementation(myPayment);
@@ -119,7 +119,7 @@ onUserReady(({ offline }) => {
 
 ## 8. 服务器时间
 
-`serverTime.now()`、`serverTime.today()`（默认东八区自然日）以服务器时间为准：登录响应的 `serverTime`（毫秒）与 HTTP 响应头 `Date` 自动校准。单调时钟由平台提供（Web 用 `performance.now`，小游戏用 `wx.getPerformance` / `tt.getPerformance`，启动时自动判定毫秒或微秒），校准后按单调时钟推算，修改系统时间不影响，`serverTime.calibrated` 为 true。未校准（离线进入或服务端未返回 `serverTime`）时使用本机时间；平台不提供单调时钟时按服务器偏移修正本机时间，两种情况 `calibrated` 都为 false，修改系统时间可以影响结果，奖励价值高时可在 `calibrated` 为 false 时不发放。按天发放的奖励（如 `sidebarReward`）使用 `serverTime.today()`。Web 跨域请求读取 `Date` 头需要服务端设置 `Access-Control-Expose-Headers: Date`。
+`serverTime.now()`、`serverTime.today()`（默认东八区自然日）以服务器时间为准：登录响应的 `serverTime`（毫秒）与 HTTP 响应头 `Date` 自动校准。单调时钟由平台提供（Web 用 `performance.now`，小游戏用 `wx.getPerformance` / `tt.getPerformance`，启动时自动判定毫秒或微秒），校准后按单调时钟推算，修改系统时间不影响，`serverTime.calibrated` 为 true。登录未返回 `serverTime` 时以第一个带 `Date` 头且无 `Age` 头的响应校准（秒级精度，不扣除往返耗时）；都没有（如离线进入）时使用本机时间；平台不提供单调时钟时按服务器偏移修正本机时间，两种情况 `calibrated` 都为 false，修改系统时间可以影响结果，奖励价值高时可在 `calibrated` 为 false 时不发放。按天发放的奖励（如 `sidebarReward`）使用 `serverTime.today()`。Web 跨域请求读取 `Date` 头需要服务端设置 `Access-Control-Expose-Headers: Date`。
 
 ## 8.1 每日计数、签到与钱包
 
@@ -159,7 +159,7 @@ wallet.onChange((key, amount) => refreshLabel(key, amount));
 
 1. `settings/v2/packages/project.json` 的 `designResolution` 改为 `1280 × 720`，`fitHeight: true`、`fitWidth: false`
 2. `build-configs/web.json`、`wechat.json`、`douyin.json` 的 `orientation` 改为 `landscape`
-3. 模板界面按可视区域摆放，可直接使用；示例游戏与 GM 面板按竖屏设计的固定高度（如 GM 面板 920、排行榜面板 720）需要调整
+3. 模板界面按可视区域摆放，可直接使用；示例游戏与 GM 面板按竖屏设计的固定高度（如 GM 面板 840、排行榜面板 720）需要调整
 4. 顶部避让同样适用，横屏时胶囊在右上角
 
 ## 10. 配置表

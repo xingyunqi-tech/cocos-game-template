@@ -8,6 +8,7 @@ export const unsupportedPayment: IPayment = {
 /** 包装平台支付：同一时间只允许一笔，调试时可模拟结果 */
 export const PAY_TIMEOUT_MS = 120000;
 export const ORDER_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
+export const ORDER_QUERY_TIMEOUT_MS = 15000;
 
 function isPendingOrder(value: unknown): value is PendingOrder {
     const order = value as Partial<PendingOrder> | null;
@@ -37,6 +38,7 @@ export class PaymentService {
         private readonly onResult?: (item: PayItem, result: PayResult) => void,
         private readonly timeoutMs = PAY_TIMEOUT_MS,
         private readonly now: () => number = Date.now,
+        private readonly queryTimeoutMs = ORDER_QUERY_TIMEOUT_MS,
     ) {}
 
     setImplementation(impl: IPayment) {
@@ -79,6 +81,8 @@ export class PaymentService {
         let timedOut = false;
         let timer: ReturnType<typeof setTimeout> | undefined;
         const failed = (): PayResult => ({ result: 'failed', reason: 'pay_failed' });
+        const withOrder = (result: PayResult): PayResult =>
+            result.orderId || !orderId ? result : { ...result, orderId };
         let paid: Promise<PayResult>;
         try {
             paid = Promise.resolve(this.impl.pay(item, { onOrder: (id) => (orderId = id) })).catch(failed);
@@ -96,13 +100,13 @@ export class PaymentService {
                     );
                 }, this.timeoutMs);
             });
-            return this.emit(item, await Promise.race([paid, timeout]));
+            return this.emit(item, withOrder(await Promise.race([paid, timeout])));
         } finally {
             clearTimeout(timer);
             this.paying = false;
             if (timedOut) {
                 void paid.then((late) => {
-                    const result = late.orderId || !orderId ? { ...late } : { ...late, orderId };
+                    const result = { ...withOrder(late) };
                     if (result.orderId && this.settledOrders.has(result.orderId)) return;
                     if (result.orderId && result.result !== 'pending') {
                         this.settledOrders.add(result.orderId);
@@ -114,9 +118,17 @@ export class PaymentService {
         }
     }
 
+    /** 查询失败或超过 queryTimeoutMs 未返回时为 pending */
     queryOrder(orderId: string): Promise<PayResult> {
-        if (!this.impl.queryOrder) return Promise.resolve({ result: 'failed', reason: 'unsupported', orderId });
-        return this.impl.queryOrder(orderId).catch(() => ({ result: 'pending' as const, orderId }));
+        const impl = this.impl;
+        if (!impl.queryOrder) return Promise.resolve({ result: 'failed', reason: 'unsupported', orderId });
+        const pending: PayResult = { result: 'pending', orderId };
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeout = new Promise<PayResult>((resolve) => {
+            timer = setTimeout(() => resolve(pending), this.queryTimeoutMs);
+        });
+        const answered = new Promise<PayResult>((resolve) => resolve(impl.queryOrder!(orderId))).catch(() => pending);
+        return Promise.race([answered, timeout]).finally(() => clearTimeout(timer));
     }
 
     /** 查询 store 中的 pending 订单，得到成功或失败时移除并通过 onLateResult 回调；超过 maxAgeMs 的订单直接移除。在 setImplementation 与 onLateResult 之后调用 */
@@ -130,16 +142,19 @@ export class PaymentService {
     private async recover(maxAgeMs: number) {
         if (!this.orders || !this.impl.queryOrder) return;
         const now = this.now();
+        const live: PendingOrder[] = [];
         for (const order of this.loadOrders()) {
-            if (now - order.time > maxAgeMs) {
-                this.forgetOrder(order.orderId);
-                continue;
-            }
-            const result = await this.queryOrder(order.orderId);
-            if (result.result === 'pending' || !this.forgetOrder(order.orderId)) continue;
-            this.settledOrders.add(order.orderId);
-            this.emitLate(order.item, result.orderId ? result : { ...result, orderId: order.orderId });
+            if (now - order.time > maxAgeMs) this.forgetOrder(order.orderId);
+            else live.push(order);
         }
+        await Promise.all(
+            live.map(async (order) => {
+                const result = await this.queryOrder(order.orderId);
+                if (result.result === 'pending' || !this.forgetOrder(order.orderId)) return;
+                this.settledOrders.add(order.orderId);
+                this.emitLate(order.item, result.orderId ? result : { ...result, orderId: order.orderId });
+            }),
+        );
     }
 
     private loadOrders(): PendingOrder[] {

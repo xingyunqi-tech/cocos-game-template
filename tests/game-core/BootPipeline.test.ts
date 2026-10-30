@@ -113,6 +113,21 @@ describe('BootPipeline ordering and cancellation', () => {
         expect(order).toEqual(['p1', 'p2', 'login', 'a', 'b', 'bundle', 'shop']);
     });
 
+    it('keeps registration order for the same anchor when that anchor is itself anchored and registered later', () => {
+        const after = new BootPipeline()
+            .register('login', () => undefined)
+            .register('s1', () => undefined, { after: 'q' })
+            .register('q', () => undefined, { after: 'login' })
+            .register('s2', () => undefined, { after: 'q' });
+        expect(after.stepNames).toEqual(['login', 'q', 's1', 's2']);
+        const before = new BootPipeline()
+            .register('login', () => undefined)
+            .register('s1', () => undefined, { before: 'q' })
+            .register('q', () => undefined, { after: 'login' })
+            .register('s2', () => undefined, { before: 'q' });
+        expect(before.stepNames).toEqual(['login', 's1', 's2', 'q']);
+    });
+
     it('fails at run time when an anchor is missing or anchors form a cycle', async () => {
         const missing = new BootPipeline().register('x', () => undefined, { after: 'missing' });
         expect(() => missing.stepNames).toThrow('x → missing');

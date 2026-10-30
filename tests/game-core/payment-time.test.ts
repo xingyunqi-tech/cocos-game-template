@@ -200,6 +200,52 @@ describe('PaymentService pending orders', () => {
         expect(service.pendingOrders()).toEqual([{ orderId: 'waiting', item, time: 0 }]);
     });
 
+    it('keeps orders whose query throws synchronously or never answers', async () => {
+        vi.useFakeTimers();
+        try {
+            const orders = memoryOrders([
+                { orderId: 'throws', item, time: 0 },
+                { orderId: 'silent', item, time: 0 },
+                { orderId: 'paid', item, time: 0 },
+            ]);
+            const late = vi.fn();
+            const service = new PaymentService(undefined, 1000, () => 0, 5000);
+            service.onLateResult(late);
+            service.setOrderStore(orders.store);
+            service.setImplementation({
+                supported: true,
+                pay: vi.fn(),
+                queryOrder: (orderId) => {
+                    if (orderId === 'throws') throw new Error('sync');
+                    if (orderId === 'silent') return new Promise<PayResult>(() => undefined);
+                    return Promise.resolve<PayResult>({ result: 'success' });
+                },
+            });
+            const recovering = service.recoverOrders();
+            await vi.advanceTimersByTimeAsync(5000);
+            await recovering;
+            expect(late).toHaveBeenCalledWith(item, { result: 'success', orderId: 'paid' });
+            expect(service.pendingOrders().map((o) => o.orderId)).toEqual(['throws', 'silent']);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('stores a pending order reported through onOrder when the result has no order id', async () => {
+        const orders = memoryOrders();
+        const service = new PaymentService(undefined, 1000, () => 0);
+        service.setOrderStore(orders.store);
+        service.setImplementation({
+            supported: true,
+            pay: (_item, hooks) => {
+                hooks?.onOrder('o1');
+                return Promise.resolve<PayResult>({ result: 'pending' });
+            },
+        });
+        await expect(service.pay(item)).resolves.toEqual({ result: 'pending', orderId: 'o1' });
+        expect(orders.current().map((o) => o.orderId)).toEqual(['o1']);
+    });
+
     it('reports an order once when its late result arrives during recovery', async () => {
         vi.useFakeTimers();
         try {

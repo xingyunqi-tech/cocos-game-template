@@ -7,6 +7,14 @@ let sidebarSimulated = false;
 let sidebarListeners: Array<() => void> = [];
 let pendingSidebarListeners: Array<() => void> = [];
 
+function callSidebarListener(listener: () => void) {
+    try {
+        listener();
+    } catch (err) {
+        reportError(err, 'manual', { from: 'onSidebarLaunch' });
+    }
+}
+
 export const sidebar = {
     isSupported: () => platform.sidebar.isSupported(),
     open: () => platform.sidebar.open(),
@@ -21,13 +29,7 @@ export function simulateSidebarLaunch() {
         pendingSidebarListeners = Array.from(new Set(pendingSidebarListeners.concat(sidebarListeners)));
         return;
     }
-    for (const listener of sidebarListeners.slice()) {
-        try {
-            listener();
-        } catch (err) {
-            reportError(err, 'manual', { from: 'onSidebarLaunch' });
-        }
-    }
+    for (const listener of sidebarListeners.slice()) callSidebarListener(listener);
 }
 
 const sidebarSlot = userSave.slot('sidebar', { version: 1, defaults: () => ({ lastClaimDay: '' }) });
@@ -41,13 +43,13 @@ export const sidebarReward = new SidebarReward({
 /** 从侧边栏进入（启动或切回前台）时回调；登录完成前进入的，登录后回调。同一次进入可能回调多次，发奖用 sidebarReward.claim() 判重 */
 export function onSidebarLaunch(listener: () => void): () => void {
     if (sidebar.isLaunchedFromSidebar()) {
-        if (isUserReady()) listener();
+        if (isUserReady()) callSidebarListener(listener);
         else pendingSidebarListeners.push(listener);
     }
     sidebarListeners.push(listener);
     const off = onPlatformShow((options) => {
         if (!platform.sidebar.isLaunchedFromSidebar(options)) return;
-        if (isUserReady()) listener();
+        if (isUserReady()) callSidebarListener(listener);
         else if (!pendingSidebarListeners.includes(listener)) pendingSidebarListeners.push(listener);
     });
     return () => {
@@ -60,13 +62,7 @@ export function onSidebarLaunch(listener: () => void): () => void {
 function flushSidebarListeners() {
     const listeners = pendingSidebarListeners;
     pendingSidebarListeners = [];
-    for (const listener of listeners) {
-        try {
-            listener();
-        } catch (err) {
-            reportError(err, 'manual', { from: 'onSidebarLaunch' });
-        }
-    }
+    for (const listener of listeners) callSidebarListener(listener);
 }
 
 onUserReady(() => flushSidebarListeners());

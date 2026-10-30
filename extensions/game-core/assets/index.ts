@@ -176,7 +176,7 @@ export {
 export type { ButtonOptions, LabelOptions, LayerName, Modal } from './ui/kit';
 export { SafeTopAdapter } from './ui/SafeTopAdapter';
 export { Settings } from './ui/Settings';
-export { ORDER_MAX_AGE_MS, PaymentService, unsupportedPayment } from './payment/Payment';
+export { ORDER_MAX_AGE_MS, ORDER_QUERY_TIMEOUT_MS, PaymentService, unsupportedPayment } from './payment/Payment';
 export type { LatePayListener } from './payment/Payment';
 export type { IPayment, OrderStore, PayFailReason, PayHooks, PayItem, PayResult, PendingOrder } from './payment/types';
 export { ServerTime } from './time/ServerTime';

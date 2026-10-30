@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, join, relative } from 'node:path';
 import { parseArgs } from 'node:util';
 import ExcelJS from 'exceljs';
@@ -47,12 +47,23 @@ if (values.check) {
     process.exit(1);
 }
 
+const writePaths = new Map(plan.writes.map(({ path }) => [path.toLowerCase(), path]));
+const renamed = new Set();
+for (const path of plan.stale) {
+    const target = writePaths.get(path.toLowerCase());
+    if (!target) continue;
+    renameSync(path, target);
+    if (existsSync(`${path}.meta`)) renameSync(`${path}.meta`, `${target}.meta`);
+    renamed.add(path);
+    console.log(`- 重命名 ${basename(path)} → ${basename(target)}`);
+}
 for (const { path, content, name, rows } of plan.writes) {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, content);
     console.log(name ? `✓ ${name}：${rows} 行 → ${basename(path)}` : `✓ 类型 → ${path}`);
 }
 for (const path of plan.stale) {
+    if (renamed.has(path)) continue;
     rmSync(path);
     rmSync(`${path}.meta`, { force: true });
     console.log(`- 删除过期表 ${basename(path)}`);

@@ -9,7 +9,8 @@ const state = vi.hoisted(() => ({
     readyListeners: [] as Array<() => void>,
 }));
 
-vi.mock('db://game-core/monitor/errors', () => ({ reportError: () => undefined }));
+const reported = vi.hoisted(() => [] as unknown[]);
+vi.mock('db://game-core/monitor/errors', () => ({ reportError: (err: unknown) => void reported.push(err) }));
 vi.mock('db://game-core/wiring/auth', () => ({
     isUserReady: () => state.ready,
     onUserReady: (listener: () => void) => {
@@ -62,6 +63,18 @@ describe('onSidebarLaunch', () => {
         becomeReady();
         expect(kept).toHaveBeenCalledTimes(1);
         expect(dropped).not.toHaveBeenCalled();
+    });
+
+    it('reports a throwing listener and keeps it subscribed', () => {
+        state.ready = true;
+        state.show = SIDEBAR;
+        const listener = vi.fn(() => {
+            throw new Error('boom');
+        });
+        expect(() => offs.push(onSidebarLaunch(listener))).not.toThrow();
+        show(SIDEBAR);
+        expect(listener).toHaveBeenCalledTimes(2);
+        expect(reported).toHaveLength(2);
     });
 
     it('calls back immediately for a sidebar return after the user is ready', () => {

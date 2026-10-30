@@ -1,5 +1,5 @@
 import { getEnv } from '../config/env';
-import type { RemoteSettingsMap } from '../config/RemoteConfig';
+import { isPlainObject, type RemoteSettingsMap } from '../config/RemoteConfig';
 import { createLogger } from '../monitor/logger';
 import { bootPipeline, deviceSave, http, platform, remoteConfig } from './services';
 
@@ -36,7 +36,9 @@ export function fetchRemoteConfig(path: string): Promise<Partial<RemoteSettingsM
             { timeoutMs: 2500, retries: 0 },
         )
         .then((res) => {
-            const values = res.data && typeof res.data === 'object' ? res.data : {};
+            const data: unknown = res.data ?? '';
+            if (data !== '' && !isPlainObject(data)) throw new Error('远程配置不是对象');
+            const values = data === '' ? {} : (data as Partial<RemoteSettingsMap>);
             remoteCache.set({ key: remoteCacheKey(), values });
             return values;
         });

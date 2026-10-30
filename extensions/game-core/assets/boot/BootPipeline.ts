@@ -95,30 +95,28 @@ export class BootPipeline {
     }
 
     private ordered(): Step[] {
-        const placed = this.steps.filter((s) => s.before === undefined && s.after === undefined);
-        const lastAfter = new Map<string, Step>();
-        let pending = this.steps.filter((s) => !placed.includes(s));
-        while (pending.length > 0) {
-            const rest: Step[] = [];
-            for (const step of pending) {
-                const anchor = (step.before ?? step.after)!;
-                const target = placed.find((s) => s.name === anchor);
-                if (!target) {
-                    rest.push(step);
-                    continue;
-                }
-                if (step.before !== undefined) {
-                    placed.splice(placed.indexOf(target), 0, step);
-                } else {
-                    placed.splice(placed.indexOf(lastAfter.get(anchor) ?? target) + 1, 0, step);
-                    lastAfter.set(anchor, step);
-                }
-            }
-            if (rest.length === pending.length) {
-                const detail = rest.map((s) => `${s.name} → ${s.before ?? s.after}`).join('，');
-                throw new Error(`启动步骤的锚点未注册或循环依赖：${detail}`);
-            }
-            pending = rest;
+        const names = new Set(this.steps.map((s) => s.name));
+        const before = new Map<string, Step[]>();
+        const after = new Map<string, Step[]>();
+        for (const step of this.steps) {
+            const anchor = step.before ?? step.after;
+            if (anchor === undefined || !names.has(anchor)) continue;
+            const group = step.before !== undefined ? before : after;
+            group.set(anchor, (group.get(anchor) ?? []).concat(step));
+        }
+        const placed: Step[] = [];
+        const visit = (step: Step) => {
+            for (const child of before.get(step.name) ?? []) visit(child);
+            placed.push(step);
+            for (const child of after.get(step.name) ?? []) visit(child);
+        };
+        for (const step of this.steps) if (step.before === undefined && step.after === undefined) visit(step);
+        if (placed.length < this.steps.length) {
+            const detail = this.steps
+                .filter((s) => !placed.includes(s))
+                .map((s) => `${s.name} → ${s.before ?? s.after}`)
+                .join('，');
+            throw new Error(`启动步骤的锚点未注册或循环依赖：${detail}`);
         }
         return placed;
     }

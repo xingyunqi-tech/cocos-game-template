@@ -1,6 +1,8 @@
-import { mkdtempSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import ExcelJS from 'exceljs';
 import { describe, expect, it } from 'vitest';
 import { convertSheet, planTables, readWorkbookTables, renderTypes } from '../../scripts/lib/tables.mjs';
@@ -150,5 +152,28 @@ describe('planTables', () => {
     it('throws before any output for duplicate names or type name clashes', () => {
         expect(() => planTables([table('a'), table('a')], options)).toThrow('表名 a 重复');
         expect(() => planTables([table('a_b'), table('aB')], options)).toThrow('类型名 ABRow 冲突');
+        expect(() => planTables([table('level'), table('Level')], options)).toThrow('类型名 LevelRow 冲突');
+    });
+});
+
+describe('tables script', () => {
+    const script = join(dirname(fileURLToPath(import.meta.url)), '../../scripts/tables.mjs');
+
+    it('keeps the generated json when a table is renamed by letter case only', async () => {
+        const dir = mkdtempSync(join(tmpdir(), 'tables-run-'));
+        const input = join(dir, 'xlsx');
+        const json = join(dir, 'json');
+        mkdirSync(input);
+        mkdirSync(json);
+        writeFileSync(join(json, 'level.json'), '{}\n');
+        writeFileSync(join(json, 'level.json.meta'), '{"uuid":"keep"}\n');
+        const workbook = new ExcelJS.Workbook();
+        workbook.addWorksheet('Level').addRows([['id'], ['int'], [''], [1]]);
+        await workbook.xlsx.writeFile(join(input, 'a.xlsx'));
+        execFileSync(process.execPath, [script, '--input', input, '--json', json, '--types', join(dir, 'Types.ts')], {
+            stdio: 'pipe',
+        });
+        expect(readdirSync(json).sort()).toEqual(['Level.json', 'Level.json.meta']);
+        expect(readFileSync(join(json, 'Level.json.meta'), 'utf8')).toContain('keep');
     });
 });
