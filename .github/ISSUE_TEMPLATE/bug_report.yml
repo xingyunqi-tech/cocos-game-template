@@ -1,0 +1,67 @@
+name: Bug 报告
+description: 提交一个 Bug
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你提交 Bug 报告！请尽量详细描述问题，以便我们快速定位和修复。
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 清晰简洁地描述遇到的问题
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 如何复现这个问题？
+      placeholder: |
+        1. 打开 '...'
+        2. 点击 '...'
+        3. 出现错误
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+      description: 你期望发生什么？
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 平台
+      multiple: true
+      options:
+        - Web
+        - 微信小游戏
+        - 抖音小游戏
+        - 编辑器预览
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: 版本
+      description: game-core 版本、Cocos Creator 版本，小游戏另附基础库版本与机型
+      placeholder: 例如 game-core 2.3.1、Creator 3.8.8、基础库 3.6.0、iPhone 15
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 错误日志
+      description: 如有错误日志或控制台输出，请粘贴在此
+      render: shell
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图
+      description: 如有相关截图，请在此上传

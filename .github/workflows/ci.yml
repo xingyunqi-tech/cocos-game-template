@@ -2,8 +2,10 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [master, 'release/**']
   pull_request:
+    branches: [master, 'release/**']
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -17,8 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -27,7 +29,7 @@ jobs:
 
   build:
     needs: verify
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request' && vars.COCOS_RUNNER == 'true'
     runs-on: [self-hosted, macOS, cocos-creator]
     timeout-minutes: 60
     defaults:
@@ -37,8 +39,8 @@ jobs:
       WECHAT_APPID: ${{ secrets.WECHAT_APPID }}
       DOUYIN_APPID: ${{ secrets.DOUYIN_APPID }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -52,7 +54,7 @@ jobs:
           else
             npm run build -- --allow-placeholder-appid | tee temp/build-report.txt
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: packages-${{ github.sha }}
