@@ -74,11 +74,13 @@ export function openGmPanel(actions: GmActions) {
             envRow,
             type,
             () => {
-                if (current) return;
+                if (actions.currentEnv() === type) return;
                 void actions.confirm(`切换到 ${type} 环境并重启？`).then((ok) => {
                     if (!ok) return;
                     actions.setEnv(type);
-                    if (!actions.restart()) actions.toast('已设置，重新打开游戏后生效');
+                    if (actions.restart()) return;
+                    actions.toast('已设置，重新打开游戏后生效');
+                    modal.close();
                 });
             },
             {

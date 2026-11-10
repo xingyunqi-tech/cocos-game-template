@@ -9,7 +9,7 @@ extensions/game-core/ 模板核心：平台适配、网络、存档、UI、合�
 extensions/oops-plugin-framework/  oops 框架，禁止修改
 ```
 
-- 业务层不直接访问 `wx`、`tt`、`window`、`globalThis`，平台能力通过 `platform` 使用（ESLint 检查）
+- 业务层不直接访问 `wx`、`tt`、`window`、`self`、`globalThis`，平台能力通过 `platform` 使用（ESLint 检查）
 - 业务层只引用 `db://game-core`（类型扩展用 `declare module 'db://game-core/augment'`），ESLint 禁止引用 game-core 的其他路径
 - 修改 game-core 前先确认能否通过扩展点实现，必须修改时向模板仓库提交，避免下游各自改插件：
   - `configureCore({ platform, store, transport })`：在模块顶层调用，替换平台实现、存档存储后端、HTTP 传输层；自定义平台的 `name` 可以是内置名称之外的字符串

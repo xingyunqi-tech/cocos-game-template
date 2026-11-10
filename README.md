@@ -38,7 +38,7 @@ python3 -m http.server -d build/web-mobile 8080    # 浏览器打开 http://127.
 | `npm run upload:wechat -- --version 1.0.0 --desc 说明`                                               | 上传微信体验版（`--robot` 指定机器人编号，`--dry-run` 只做检查）                                                                                                                                                                                     |
 | `npm run upload:douyin -- --version 1.0.0 --desc 说明`                                               | 上传抖音测试版                                                                                                                                                                                                                                       |
 | `npm run smoke:web [-- --skip-demo]`                                                                 | 运行 `build/web-mobile`（需 `--debug` 构建），通用检查后执行 `scripts/smoke-game.mjs` 的游戏检查；`--skip-demo` 用于删除示例游戏后                                                                                                                   |
-| `npm run verify`                                                                                     | 格式、lint、类型检查、单测、插件校验                                                                                                                                                                                                                 |
+| `npm run verify`                                                                                     | 格式、lint、类型检查、单测、插件校验、配置表校验                                                                                                                                                                                                     |
 | `npm run check:plugins`                                                                              | 校验 `extensions/oops-plugin-framework` 与 `extensions/game-core` 与锁定快照一致                                                                                                                                                                     |
 | `npm run tables`                                                                                     | `config-tables/*.xlsx` 生成配置表 JSON 与类型                                                                                                                                                                                                        |
 | `npm run new:module -- <名称>`                                                                       | 生成业务模块骨架                                                                                                                                                                                                                                     |
@@ -92,7 +92,7 @@ types/                              无编辑器环境的类型声明
 docs/                               开发计划、验证报告、贡献流程、发布清单
 ```
 
-业务代码约束（ESLint 检查）：不直接访问 `wx`、`tt`、`window`、`globalThis`；只通过 `db://game-core` 公开入口使用模板能力，不引用 `db://game-core/**/impl/**`。
+业务代码约束（ESLint 检查）：不直接访问 `wx`、`tt`、`window`、`self`、`globalThis`；只通过 `db://game-core` 公开入口使用模板能力，除类型扩展用的 `db://game-core/augment` 外不引用 game-core 的其他路径。
 
 ## 环境配置
 
