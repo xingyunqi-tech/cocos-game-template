@@ -1,0 +1,195 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 上传平台
+        required: true
+        default: all
+        type: choice
+        options: [all, wechat, douyin]
+      version:
+        description: 版本号（x.y.z）
+        required: true
+        type: string
+      desc:
+        description: 版本说明
+        required: true
+        type: string
+      dry_run:
+        description: 只构建并做上传前检查，不上传
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      platforms: ${{ steps.plan.outputs.platforms }}
+    steps:
+      - name: Check inputs and config
+        id: plan
+        env:
+          TARGET: ${{ inputs.target }}
+          VERSION: ${{ inputs.version }}
+          COCOS_RUNNER: ${{ vars.COCOS_RUNNER }}
+          WECHAT_APPID: ${{ secrets.WECHAT_APPID }}
+          DOUYIN_APPID: ${{ secrets.DOUYIN_APPID }}
+        run: |
+          has_error=0
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::版本号须为 x.y.z：${VERSION}"
+            has_error=1
+          fi
+          if [[ "$COCOS_RUNNER" != "true" ]]; then
+            echo "::error::未启用自建 Runner（仓库变量 COCOS_RUNNER 须为 true，见 docs/ci.md）"
+            has_error=1
+          fi
+          case "$TARGET" in
+            all) platforms='["wechat","douyin"]' ;;
+            *) platforms="[\"${TARGET}\"]" ;;
+          esac
+          for platform in wechat douyin; do
+            [[ "$TARGET" == all || "$TARGET" == "$platform" ]] || continue
+            var="${platform^^}_APPID"
+            if [[ -z "${!var}" ]]; then
+              echo "::error::缺少 secret ${var}"
+              has_error=1
+            fi
+          done
+          [[ $has_error -eq 1 ]] && exit 1
+          echo "platforms=${platforms}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build
+    needs: preflight
+    runs-on: [self-hosted, macOS, cocos-creator]
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      WECHAT_APPID: ${{ secrets.WECHAT_APPID }}
+      DOUYIN_APPID: ${{ secrets.DOUYIN_APPID }}
+      REMOTE_SERVER: ${{ vars.REMOTE_SERVER }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: 发布构建与包体检查
+        env:
+          PLATFORMS: ${{ join(fromJSON(needs.preflight.outputs.platforms), ' ') }}
+        run: |
+          read -ra platforms <<< "$PLATFORMS"
+          mkdir -p temp
+          npm run build -- "${platforms[@]}" | tee temp/build-report.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packages-${{ github.sha }}
+          path: build
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: build-logs-${{ github.sha }}
+          path: |
+            temp/build-report.txt
+            temp/build-logs
+          if-no-files-found: ignore
+
+  upload:
+    name: Upload ${{ matrix.platform }}
+    needs: [preflight, build]
+    runs-on: [self-hosted, macOS, cocos-creator]
+    timeout-minutes: 30
+    environment:
+      name: mini-game-production
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(needs.preflight.outputs.platforms) }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      WECHAT_APPID: ${{ secrets.WECHAT_APPID }}
+      DOUYIN_APPID: ${{ secrets.DOUYIN_APPID }}
+      REMOTE_UPLOAD_COMMAND: ${{ vars.REMOTE_UPLOAD_COMMAND }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v7
+        with:
+          name: packages-${{ github.sha }}
+          path: build
+      - name: 写入微信上传密钥
+        if: matrix.platform == 'wechat'
+        env:
+          KEY: ${{ secrets.WECHAT_UPLOAD_KEY }}
+        run: |
+          key_file="$RUNNER_TEMP/wechat-upload.key"
+          umask 077
+          printf '%s\n' "$KEY" > "$key_file"
+          echo "WECHAT_UPLOAD_KEY=$key_file" >> "$GITHUB_ENV"
+      - name: 上传
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          VERSION: ${{ inputs.version }}
+          DESC: ${{ inputs.desc }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          DOUYIN_UPLOAD_TOKEN: ${{ matrix.platform == 'douyin' && secrets.DOUYIN_UPLOAD_TOKEN || '' }}
+        run: |
+          args=(--version "$VERSION" --desc "$DESC")
+          [[ "$DRY_RUN" == "true" ]] && args+=(--dry-run)
+          node scripts/upload.mjs "$PLATFORM" "${args[@]}"
+      - name: 删除微信上传密钥
+        if: always() && matrix.platform == 'wechat'
+        run: rm -f "$RUNNER_TEMP/wechat-upload.key"
+
+  summary:
+    name: Summary
+    needs: [preflight, build, upload]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Summary
+        env:
+          TARGET: ${{ inputs.target }}
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          PREFLIGHT: ${{ needs.preflight.result }}
+          BUILD: ${{ needs.build.result }}
+          UPLOAD: ${{ needs.upload.result }}
+        run: |
+          {
+            echo "# 发布结果"
+            echo ""
+            echo "| 阶段 | 状态 |"
+            echo "|------|------|"
+            echo "| 前置检查 | ${PREFLIGHT} |"
+            echo "| 构建 | ${BUILD} |"
+            echo "| 上传（${TARGET}$([[ "$DRY_RUN" == "true" ]] && echo '，dry-run')） | ${UPLOAD} |"
+            echo ""
+            echo "**版本**: ${VERSION}"
+            echo "**Git Hash**: \`${GITHUB_SHA::7}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

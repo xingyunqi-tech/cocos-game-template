@@ -61,8 +61,8 @@
 
 ## 6. 上传
 
-- [ ] `--dry-run` 检查通过
+- [ ] `--dry-run` 检查通过（CI 发布时勾选 `dry_run` 运行一次 Deploy）
 - [ ] 微信上传 IP 白名单包含本机或 CI 出口 IP
-- [ ] `npm run upload:wechat -- --version <版本号> --desc <说明>` 成功，体验版可打开，平台统计的包体与构建报告一致
+- [ ] `npm run upload:wechat -- --version <版本号> --desc <说明>`（或 CI 的 Deploy 工作流）成功，体验版可打开，平台统计的包体与构建报告一致
 - [ ] `npm run upload:douyin -- --version <版本号> --desc <说明>` 成功，预检通过
 - [ ] 版本号与 `config.json` 的 `version`、`game-core` CHANGELOG 记录一致

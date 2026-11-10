@@ -1,4 +1,4 @@
-name: ci
+name: Check
 
 on:
   push:
@@ -11,11 +11,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  group: check-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   verify:
+    name: Verify
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -27,17 +28,15 @@ jobs:
       - run: npm ci
       - run: npm run verify
 
-  build:
+  smoke:
+    name: Web Smoke
     needs: verify
     if: github.event_name != 'pull_request' && vars.COCOS_RUNNER == 'true'
     runs-on: [self-hosted, macOS, cocos-creator]
-    timeout-minutes: 60
+    timeout-minutes: 30
     defaults:
       run:
         shell: bash
-    env:
-      WECHAT_APPID: ${{ secrets.WECHAT_APPID }}
-      DOUYIN_APPID: ${{ secrets.DOUYIN_APPID }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -45,23 +44,13 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - name: Web 冒烟
+      - name: Web 调试构建与冒烟
         run: npm run build -- web --debug && npm run smoke:web -- --screenshot temp/smoke.png
-      - name: 三端发布构建与包体检查
-        run: |
-          if [ -n "$WECHAT_APPID" ] && [ -n "$DOUYIN_APPID" ]; then
-            npm run build | tee temp/build-report.txt
-          else
-            npm run build -- --allow-placeholder-appid | tee temp/build-report.txt
-          fi
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: packages-${{ github.sha }}
+          name: smoke-${{ github.sha }}
           path: |
-            build/web-mobile
-            build/wechatgame
-            build/bytedance-mini-game
-            temp/build-report.txt
             temp/smoke.png
             temp/build-logs
+          if-no-files-found: ignore
