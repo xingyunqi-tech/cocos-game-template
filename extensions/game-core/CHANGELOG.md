@@ -26,6 +26,8 @@
 - `scripts/lib/upload.mjs`：`REMOTE_UPLOAD_COMMAND` 中反斜杠转义按 POSIX shell 规则识别，`{dir}` 的引用方式按实际所在引号确定；`{dir}` 前有反斜杠时报错
 - `scripts/update-core.mjs`：`game-core.old` 与 `game-core` 同时存在时，`game-core` 与锁定快照一致则删除残留的 `game-core.old`，否则中止并保留 `game-core.old`；恢复失败的提示与实际恢复条件一致
 - ESLint：业务代码禁止直接访问 `self`
+- Node.js 要求 `^24 || >=26`，`.nvmrc` 为 24，`@types/node` 24；下游项目同步修改 `package.json` 的 `engines`、`@types/node` 与 `.nvmrc`，并重新生成 `package-lock.json`
+- CI 拆分为 `check.yml`（verify 与 Web 冒烟）与 `deploy.yml`（手动发布构建与上传），说明见 `docs/ci.md`；下游复制工作流时删除旧的 `ci.yml`
 - `scripts/lib/cocos.mjs`、`scripts/smoke-web.mjs`：`COCOS_CREATOR_APP`、`CHROME_PATH` 为空时使用默认安装路径
 - `scripts/tables.mjs`：表名只改大小写时把原 JSON 与 `.meta` 重命名为新表名后写入，保留资源 UUID，不区分大小写的文件系统上不再删除新生成的 JSON
 

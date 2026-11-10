@@ -55,7 +55,7 @@ oops 备选（develop 出现阻塞问题时评估）：
 | 模板核心 | `game-core` 编辑器插件 | 语义化版本 | 结构同 oops 插件：`package.json` 的 `asset-db.mount` 挂载 `assets/`，以 `db://game-core/*` 引用 |
 | 语言（编辑器编译） | TypeScript | Creator 内置 | 引擎自带编译链，不受外部 TS 版本影响 |
 | 类型检查 | `typescript` | 6.0.3 | 最新的 7.0.2 不满足 typescript-eslint 8.71.2 的 peer 要求（`>=4.8.4 <6.1.0`），取兼容的最新版；strict 仅覆盖 `game-core` 与 `assets/game`。tsconfig 需要：`paths`（`db://oops-framework/*`、`db://game-core/*`）、`include` oops 的 `assets/types` 与 `libs/extension/NodeExt.ts`、项目侧 `types/cc-env.d.ts`（48 个常量）、`types/game-storage.d.ts`（`GameStorageKey`）、`types/oops-shims.d.ts`（`ViewModel`），S0 已验证 0 错误 |
-| 运行时 | Node.js | `^22.13 \|\| ^24 \|\| >=26` | ESLint 10 与 Vitest 5 的 engines 交集；写入 `package.json` `engines` |
+| 运行时 | Node.js | `^24 \|\| >=26` | Node 24 或 26 及以上（Vitest 5 不支持 25）；写入 `package.json` `engines`，`.nvmrc` 为 24 |
 | HTTP | 自研 HttpClient（XMLHttpRequest） | — | 不使用 oops HTTP |
 | 日志 | 自研分级 Logger | — | prod 不调用 `oops.log.disable()` |
 | 配置表 | Excel → JSON + TS 类型 | `exceljs` 4.4.0 | npm 上的 `xlsx` 停在 0.18.5（SheetJS 已改为自有源发布），不采用；优先评估教程工程附带的 excel-to-json 插件 |

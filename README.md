@@ -8,7 +8,7 @@ Cocos Creator 多端小游戏模板，目标平台：Web、微信小游戏、抖
 | --------------------- | -------------------------------------------------------------------------------------------------- |
 | Cocos Creator         | 3.8.8                                                                                              |
 | oops-plugin-framework | develop `0152111f7c0efd895d376e4c0caaf9027549c865`（`extensions/oops-plugin-framework`，原样提交） |
-| Node.js               | `^22.13 \|\| ^24 \|\| >=26`                                                                        |
+| Node.js               | `^24 \|\| >=26`（`.nvmrc` 为 24）                                                                  |
 | Google Chrome         | 运行 `smoke:web` 需要                                                                              |
 
 Creator 默认路径：macOS `/Applications/Cocos/Creator/3.8.8/CocosCreator.app`，Windows `C:/ProgramData/cocos/editors/Creator/3.8.8/CocosCreator.exe`。其他位置通过环境变量 `COCOS_CREATOR_APP` 指定（macOS 指向 `.app`，Windows 指向 `CocosCreator.exe`）。
