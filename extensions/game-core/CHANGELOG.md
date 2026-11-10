@@ -17,11 +17,14 @@
 - `ServerTime.syncFromDateHeader`：已同步时推算时间落后 Date 头超过 `DATE_RESYNC_TOLERANCE_MS`（2 秒）则向前校准，不向后调整；每个无 `Age` 头的响应都参与核对
 - `PlatformName` 接受内置名称之外的字符串，`configureCore({ platform })` 可注入自定义名称的平台
 - `GameRoot`：`config.json` 的 `type` 没有对应环境配置（或配置不是对象）时输出错误日志并显示 `coreText.initFailed`
+- `SaveStore`：存档版本与当前版本相同且内容为 `null` 时按数据读出，之后可正常写入
+- `TrackUploader.flushAll()`：等待中的发送失败后返回，按退避等待下次发送
 
 ### 构建
 
 - `scripts/lib/upload.mjs`：`REMOTE_UPLOAD_COMMAND` 中反斜杠转义按 POSIX shell 规则识别，`{dir}` 的引用方式按实际所在引号确定；`{dir}` 前有反斜杠时报错
 - `scripts/update-core.mjs`：`game-core.old` 与 `game-core` 同时存在时，`game-core` 与锁定快照一致则删除残留的 `game-core.old`，否则中止并保留 `game-core.old`；恢复失败的提示与实际恢复条件一致
+- `scripts/lib/cocos.mjs`、`scripts/smoke-web.mjs`：`COCOS_CREATOR_APP`、`CHROME_PATH` 为空时使用默认安装路径
 - `scripts/tables.mjs`：表名只改大小写时把原 JSON 与 `.meta` 重命名为新表名后写入，保留资源 UUID，不区分大小写的文件系统上不再删除新生成的 JSON
 
 ## 2.3.0（2026-10-29）

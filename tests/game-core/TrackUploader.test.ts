@@ -131,6 +131,21 @@ describe('TrackUploader', () => {
         expect(uploader.pending).toBe(1);
     });
 
+    it('stops flushAll when the in-flight batch fails', async () => {
+        let fail: (err: Error) => void = () => undefined;
+        const send = vi.fn<(records: UploadRecord[]) => Promise<void>>(() => Promise.reject(new Error('offline')));
+        send.mockImplementationOnce(() => new Promise((_, reject) => (fail = reject)));
+        const uploader = new TrackUploader({ send, ...manualTimer() });
+        uploader.push(record('a'));
+        const first = uploader.flush();
+        const all = uploader.flushAll();
+        fail(new HttpError('network', 'offline'));
+        await first;
+        await all;
+        expect(send).toHaveBeenCalledTimes(1);
+        expect(uploader.pending).toBe(1);
+    });
+
     it('drops batches that fail permanently and backs off on retryable failures', async () => {
         const delays: number[] = [];
         const send = vi.fn<(records: UploadRecord[]) => Promise<void>>(() => Promise.reject(new Error('400')));

@@ -2,7 +2,14 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { judgeBuild, recoverGameEnv, resolveBuildConfig, runBuild, useGameEnv } from '../../scripts/lib/cocos.mjs';
+import {
+    creatorApp,
+    judgeBuild,
+    recoverGameEnv,
+    resolveBuildConfig,
+    runBuild,
+    useGameEnv,
+} from '../../scripts/lib/cocos.mjs';
 
 const NOISE = [
     '10-15-2026 03:32:25 - debug: Error: Exit process with code:null, signal:SIGTERM in task build-script',
@@ -24,6 +31,22 @@ describe('judgeBuild', () => {
     it('fails non-36 exit codes', () => {
         expect(judgeBuild(34, NOISE).ok).toBe(false);
         expect(judgeBuild(32, '').ok).toBe(false);
+    });
+});
+
+describe('creatorApp', () => {
+    it('uses the default install path when COCOS_CREATOR_APP is empty', () => {
+        const saved = process.env.COCOS_CREATOR_APP;
+        try {
+            delete process.env.COCOS_CREATOR_APP;
+            const fallback = process.platform in { darwin: 1, win32: 1 } ? creatorApp() : null;
+            process.env.COCOS_CREATOR_APP = ' ';
+            if (fallback) expect(creatorApp()).toBe(fallback);
+            else expect(() => creatorApp()).toThrow('COCOS_CREATOR_APP');
+        } finally {
+            if (saved === undefined) delete process.env.COCOS_CREATOR_APP;
+            else process.env.COCOS_CREATOR_APP = saved;
+        }
     });
 });
 

@@ -265,6 +265,19 @@ describe('SaveStore edge cases', () => {
         expect(onWarn).toHaveBeenCalledTimes(3);
     });
 
+    it('reads and rewrites a stored null at the current version', () => {
+        const onWarn = vi.fn();
+        const { save, store } = setup({ onWarn });
+        const nullable = { version: 1, defaults: (): { x: number } | null => ({ x: 0 }) };
+        store.setItem('gc:u:n', JSON.stringify({ v: 1, d: null }));
+        const slot = save.slot('n', nullable);
+        expect(slot.get()).toBeNull();
+        slot.set({ x: 5 });
+        save.flush();
+        expect(JSON.parse(store.getItem('gc:u:n')!)).toEqual({ v: 1, d: { x: 5 } });
+        expect(onWarn).not.toHaveBeenCalled();
+    });
+
     it('keeps writing other keys when one write throws and retains the failed key', () => {
         const onWarn = vi.fn();
         const { save, store } = setup({ onWarn });

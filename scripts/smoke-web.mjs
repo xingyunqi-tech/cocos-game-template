@@ -86,7 +86,7 @@ await new Promise((done) => server.listen(0, '127.0.0.1', done));
 
 const port = server.address().port;
 const browser = await chromium.launch({
-    executablePath: values.chrome ?? DEFAULT_CHROME[process.platform],
+    executablePath: values.chrome?.trim() || DEFAULT_CHROME[process.platform],
     headless: true,
     args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'],
 });

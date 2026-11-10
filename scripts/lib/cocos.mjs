@@ -29,7 +29,7 @@ const DEFAULT_CREATOR = {
 };
 
 export function creatorApp() {
-    const app = process.env.COCOS_CREATOR_APP ?? DEFAULT_CREATOR[process.platform];
+    const app = process.env.COCOS_CREATOR_APP?.trim() || DEFAULT_CREATOR[process.platform];
     if (!app) {
         throw new Error('请设置 COCOS_CREATOR_APP：macOS 指向 CocosCreator.app，Windows 指向 CocosCreator.exe');
     }

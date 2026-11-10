@@ -72,6 +72,8 @@ function scopeFilter(prefix: string): (key: string) => boolean {
     return (key) => key.startsWith(prefix) && !key.slice(prefix.length).includes(':');
 }
 
+const UNMIGRATABLE = Symbol('unmigratable');
+
 function hasMigrationPath(from: number, to: number, migrations: Record<number, Migration> = {}): boolean {
     for (let version = from + 1; version <= to; version++) if (!migrations[version]) return false;
     return true;
@@ -170,16 +172,14 @@ export class SaveStore {
             return options.defaults();
         }
         const detail = { key, from: parsed.v, to: options.version };
-        let data: unknown;
+        let data: unknown = UNMIGRATABLE;
         try {
-            data = hasMigrationPath(parsed.v, options.version, options.migrations)
-                ? migrate(parsed, options.version, options.migrations)
-                : null;
+            if (hasMigrationPath(parsed.v, options.version, options.migrations))
+                data = migrate(parsed, options.version, options.migrations);
         } catch (err) {
-            data = null;
             Object.assign(detail, { error: errorText(err) });
         }
-        if (data === null) {
+        if (data === UNMIGRATABLE) {
             this.locks.set(fullKey, 'unmigratable');
             this.warn('存档版本无法迁移，使用默认值且不写入', detail);
             return options.defaults();

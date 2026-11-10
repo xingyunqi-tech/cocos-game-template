@@ -153,6 +153,7 @@ export class TrackUploader {
         for (;;) {
             if (this.sending) {
                 await this.sending;
+                if (this.failures > 0) return;
                 continue;
             }
             if (this.buffer.length === 0) return;
